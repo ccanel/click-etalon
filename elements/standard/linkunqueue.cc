@@ -62,6 +62,7 @@ LinkUnqueue::initialize(ErrorHandler *errh)
     ScheduleInfo::initialize_task(this, &_task, errh);
     _timer.initialize(this);
     _signal = Notifier::upstream_empty_signal(this, 0, &_task);
+    _can_push_signal = Notifier::downstream_full_signal(this, 0, &_task);
     Storage::_capacity = 0x7FFFFFFF;
     //_state = S_ASLEEP;
     _back_to_back = false;
@@ -82,8 +83,8 @@ void
 LinkUnqueue::delay_by_bandwidth(Packet *p, const Timestamp &tv) const
 {
     uint32_t length = p->length() + EXTRA_LENGTH_ANNO(p);
-    uint32_t delay = (length * 10000) / _bandwidth;
-    p->set_timestamp_anno(tv + Timestamp::make_usec(delay));
+    uint32_t delay = (length * (uint64_t)10000000) / _bandwidth;
+    p->set_timestamp_anno(tv + Timestamp::make_nsec(delay));
 }
 
 #if 0
@@ -138,6 +139,9 @@ LinkUnqueue::run_task(Task *)
 
     // Emit packets if it's time
     while (_qhead && _qhead->timestamp_anno() <= now) {
+	if (!_can_push_signal) {
+	    return false;
+	}
 	Packet *p = _qhead;
 	_qhead = p->next();
 	if (!_qhead)

@@ -2,6 +2,7 @@
 #ifndef CLICK_FULLNOTEQUEUE_HH
 #define CLICK_FULLNOTEQUEUE_HH
 #include "notifierqueue.hh"
+#include <pthread.h>
 CLICK_DECLS
 
 /*
@@ -74,14 +75,18 @@ class FullNoteQueue : public NotifierQueue { public:
 
     int configure(Vector<String> &conf, ErrorHandler *) CLICK_COLD;
     int live_reconfigure(Vector<String> &conf, ErrorHandler *errh);
-#if CLICK_DEBUG_SCHEDULING
+    //#if CLICK_DEBUG_SCHEDULING
     void add_handlers() CLICK_COLD;
-#endif
+    //#endif
 
     void push(int port, Packet *p);
     Packet *pull(int port);
 
   protected:
+
+    unsigned long long enqueue_bytes;
+    unsigned long long dequeue_bytes;
+    unsigned long long dequeue_bytes_no_headers;
 
     ActiveNotifier _full_note;
 
@@ -95,7 +100,14 @@ class FullNoteQueue : public NotifierQueue { public:
 #if CLICK_DEBUG_SCHEDULING
     static String read_handler(Element *e, void *user_data) CLICK_COLD;
 #endif
+    static String read_enqueue_bytes(Element *e, void *user_data);
+    static String read_dequeue_bytes(Element *e, void *user_data);
+    static String read_dequeue_bytes_no_headers(Element *e, void *user_data);
+    static String read_bytes(Element *e, void *user_data);
+    static int resize_capacity(const String&, Element*, void*, ErrorHandler*);
+    static String get_resize_capacity(Element *e, void *user_data);
 
+    pthread_mutex_t _lock;
 };
 
 inline void
