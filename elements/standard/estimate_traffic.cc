@@ -314,7 +314,7 @@ EstimateTraffic::run_timer(Timer *)
 	    int i = psrc * _num_hosts + pdst;
 	    char handler[500];
 	    printf("\n");
-	    sprintf(handler, "hybrid_switch/q%d%d/q.length", psrc+1, pdst+);
+	    sprintf(handler, "hybrid_switch/q%d%d/q.length", psrc+1, pdst+1);
 	    int len = atoi(HandlerCall::call_read(handler,
 						  this).c_str());
 	    sprintf(handler, "hybrid_switch/ps/q%d%d.length", psrc+1, pdst+1);
