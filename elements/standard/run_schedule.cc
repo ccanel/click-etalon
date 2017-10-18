@@ -66,7 +66,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     for(int src = 0; src < _num_hosts; src++) {
 	for(int dst = 0; dst < _num_hosts; dst++) {
 	    char handler[500];
-	    sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src, dst);
+	    sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
 	    _queue_capacity[src * _num_hosts + dst] = new HandlerCall(handler);
 	    _queue_capacity[src * _num_hosts + dst]->initialize(HandlerCall::f_read | HandlerCall::f_write,
 								this, errh);
@@ -75,7 +75,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     _pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
 	char handler[500];
-	sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst);
+	sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst+1);
 	_pull_switch[dst] = new HandlerCall(handler);
 	_pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
     }
