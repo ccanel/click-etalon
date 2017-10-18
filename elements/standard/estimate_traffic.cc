@@ -320,13 +320,13 @@ EstimateTraffic::run_timer(Timer *)
 	    sprintf(handler, "hybrid_switch/ps/q%d%d.length", psrc+1, pdst+1);
 	    int pslen = atoi(HandlerCall::call_read(handler,
 						    this).c_str());
-	    printf("%s: (0, 1)\tae = %lld, ad = %lld, e = %lld, d = %lld, tm = %lld, len = %d, pslen= %d\n",
+	    printf("%s: (1, 2)\tae = %lld, ad = %lld, e = %lld, d = %lld, tm = %lld, len = %d, pslen= %d\n",
 		   source.c_str(), _adu_enqueue_matrix[i], _adu_dequeue_matrix[i],
 		   _enqueue_matrix[i], _dequeue_matrix[i],
 		   _traffic_matrix[i], len, pslen);
 
-	    psrc = 3;
-	    pdst = 1;
+	    psrc = 2;
+	    pdst = 3;
 	    i = psrc * _num_hosts + pdst;
 	    sprintf(handler, "hybrid_switch/q%d%d/q.length", psrc+1, pdst+1);
 	    len = atoi(HandlerCall::call_read(handler,
@@ -334,7 +334,7 @@ EstimateTraffic::run_timer(Timer *)
 	    sprintf(handler, "hybrid_switch/ps/q%d%d.length", psrc+1, pdst+1);
 	    pslen = atoi(HandlerCall::call_read(handler,
 						this).c_str());
-	    printf("%s: (2, 3)\tae = %lld, ad = %lld, e = %lld, d = %lld, tm = %lld, len = %d, pslen= %d\n",
+	    printf("%s: (3, 4)\tae = %lld, ad = %lld, e = %lld, d = %lld, tm = %lld, len = %d, pslen= %d\n",
 		   source.c_str(), _adu_enqueue_matrix[i], _adu_dequeue_matrix[i],
 		   _enqueue_matrix[i], _dequeue_matrix[i],
 		   _traffic_matrix[i], len, pslen);
