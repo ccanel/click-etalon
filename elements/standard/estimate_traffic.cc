@@ -20,6 +20,7 @@
 #include "estimate_traffic.hh"
 #include <click/confparse.hh>
 #include <click/error.hh>
+#include <click/standard/scheduleinfo.hh>
 #include <sys/select.h>
 #include <pthread.h>
 #include <unistd.h>

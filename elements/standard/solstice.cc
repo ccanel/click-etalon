@@ -20,6 +20,7 @@
 #include "solstice.hh"
 #include <click/confparse.hh>
 #include <click/error.hh>
+#include <click/standard/scheduleinfo.hh>
 #include <sys/select.h>
 
 CLICK_DECLS
