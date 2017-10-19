@@ -189,7 +189,7 @@ Solstice::run_task(Task *)
                 int src = day->input_ports[dst];
                 if (src < 0) {
                     printf("SOLSTICE BAD PORT\n");
-                    return;
+                    return true;
                 }
                 sprintf(&(schedule[strlen(schedule)]), "%d/", src);
             }
