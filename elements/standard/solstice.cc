@@ -85,7 +85,7 @@ Solstice::initialize(ErrorHandler *errh)
     return 0;
 }
 
-void
+bool
 Solstice::run_task(Task *)
 {
     while(1) {
@@ -241,6 +241,7 @@ Solstice::run_task(Task *)
 
         free(schedule);
     }
+    return true;
 }
 
 int

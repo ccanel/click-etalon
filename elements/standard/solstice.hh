@@ -32,7 +32,7 @@ class Solstice : public Element {
     int initialize(ErrorHandler *) CLICK_COLD;
     void add_handlers() CLICK_COLD;
 
-    void run_task(Task *);
+    bool run_task(Task *);
 
     bool enabled;
 

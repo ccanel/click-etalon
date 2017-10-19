@@ -34,7 +34,7 @@ class RunSchedule : public Element {
     int initialize(ErrorHandler *) CLICK_COLD;
     void add_handlers() CLICK_COLD;
 
-    void run_task(Task *);
+    bool run_task(Task *);
 
     String next_schedule;
     bool do_resize;

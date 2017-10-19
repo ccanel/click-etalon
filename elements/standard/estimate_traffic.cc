@@ -196,7 +196,7 @@ EstimateTraffic::initialize(ErrorHandler *errh)
     return 0;
 }
 
-void
+bool
 EstimateTraffic::run_task(Task *)
 {
     while(1) {
@@ -362,6 +362,7 @@ EstimateTraffic::run_task(Task *)
                    _traffic_matrix[i], len, pslen);
         }
     }
+    return true;
 }
 
 String

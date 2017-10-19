@@ -34,7 +34,7 @@ class EstimateTraffic : public Element {
     int initialize(ErrorHandler *) CLICK_COLD;
     void add_handlers() CLICK_COLD;
 
-    void run_task(Task *);
+    bool run_task(Task *);
     String source;
     String output_traffic_matrix;
     pthread_mutex_t lock;

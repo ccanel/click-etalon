@@ -272,7 +272,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     return 0;
 }
 
-void
+bool
 RunSchedule::run_task(Task *)
 {
     while(1) {
@@ -280,6 +280,7 @@ RunSchedule::run_task(Task *)
         // if (rc)
         //     return;
     }
+    return true;
 }
 
 void
