@@ -22,17 +22,12 @@
 #include <click/error.hh>
 #include <sys/select.h>
 #include <pthread.h>
-#if defined(__APPLE__) && defined(__MACH__)
-# include <CoreServices/CoreServices.h>
-# include <mach/mach_time.h>
-# ifndef __osx__
-#  define __osx__
-# endif
-#endif
 
 CLICK_DECLS
 
-RunSchedule::RunSchedule() : _timer(this), _num_hosts(0), _big_buffer_size(100), _small_buffer_size(10), _print(0)
+RunSchedule::RunSchedule() : _task(this), _num_hosts(0),
+                             _big_buffer_size(100), _small_buffer_size(10),
+                             _print(0)
 {
     pthread_mutex_init(&lock, NULL);
 }
@@ -42,9 +37,9 @@ RunSchedule::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (Args(conf, this, errh)
         .read_mp("NUM_HOSTS", _num_hosts)
-	.read_mp("BIG_BUFFER_SIZE", _big_buffer_size)
-	.read_mp("SMALL_BUFFER_SIZE", _small_buffer_size)
-	.read_mp("RESIZE", do_resize)
+        .read_mp("BIG_BUFFER_SIZE", _big_buffer_size)
+        .read_mp("SMALL_BUFFER_SIZE", _small_buffer_size)
+        .read_mp("RESIZE", do_resize)
         .complete() < 0)
         return -1;
     if (_num_hosts == 0)
@@ -56,7 +51,7 @@ RunSchedule::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 RunSchedule::initialize(ErrorHandler *errh)
 {
-    _timer.initialize(this);
+    ScheduleInfo::initialize_task(this, &_task, true, errh);
     
 #if defined(__linux__)
     sched_setscheduler(getpid(), SCHED_RR, NULL);
@@ -64,23 +59,23 @@ RunSchedule::initialize(ErrorHandler *errh)
 
     _queue_capacity = (HandlerCall **)malloc(sizeof(HandlerCall *) * _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
-	for(int dst = 0; dst < _num_hosts; dst++) {
-	    char handler[500];
-	    sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
-	    _queue_capacity[src * _num_hosts + dst] = new HandlerCall(handler);
-	    _queue_capacity[src * _num_hosts + dst]->initialize(HandlerCall::f_read | HandlerCall::f_write,
-								this, errh);
-	}
+        for(int dst = 0; dst < _num_hosts; dst++) {
+            char handler[500];
+            sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
+            _queue_capacity[src * _num_hosts + dst] = new HandlerCall(handler);
+            _queue_capacity[src * _num_hosts + dst]->
+                initialize(HandlerCall::f_read | HandlerCall::f_write,
+                           this, errh);
+        }
     }
     _pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
-	char handler[500];
-	sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst+1);
-	_pull_switch[dst] = new HandlerCall(handler);
-	_pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
+        char handler[500];
+        sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst+1);
+        _pull_switch[dst] = new HandlerCall(handler);
+        _pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
-    _timer.schedule_now();
     return 0;
 }
 
@@ -104,14 +99,14 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     bool current = rs->do_resize;
     BoolArg::parse(str, rs->do_resize, ArgContext());
     if (rs->do_resize && rs->do_resize != current) {
-	// get sizes based on queues sizes
-	rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-	rs->_small_buffer_size = rs->_big_buffer_size / 10; //* 10;
-	if (rs->_small_buffer_size < 1) {
-	    rs->_small_buffer_size = 1;
-	}
-	printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
-	       rs->_big_buffer_size);
+        // get sizes based on queues sizes
+        rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
+        rs->_small_buffer_size = rs->_big_buffer_size / 10; //* 10;
+        if (rs->_small_buffer_size < 1) {
+            rs->_small_buffer_size = 1;
+        }
+        printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
+               rs->_big_buffer_size);
     }
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -148,7 +143,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
 
     _print = (_print+1) % 100;
     if (!_print) {
-	printf("running sched %s\n", current_schedule.c_str());
+        printf("running sched %s\n", current_schedule.c_str());
     }
     
     if (current_schedule == "")
@@ -203,54 +198,39 @@ RunSchedule::execute_schedule(ErrorHandler *)
 
     // for each configuration in schedule
     for(int m = 0; m < num_configurations; m++) {
-	// make next days buffer big
-	if(resize) {
-	    for(int k = 0; k <= DAYS_OUT; k++) {
-		for(int i = 0; i < _num_hosts; i++) {
-		    int dst = i;
-		    int src = configurations[(m+k) % num_configurations][i];
-		    if (src == -1)
-			continue;
-		    _queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
-		}
-	    }
-	}
+        // make next days buffer big
+        if(resize) {
+            for(int k = 0; k <= DAYS_OUT; k++) {
+                for(int i = 0; i < _num_hosts; i++) {
+                    int dst = i;
+                    int src = configurations[(m+k) % num_configurations][i];
+                    if (src == -1)
+                        continue;
+                    _queue_capacity[src * _num_hosts + dst]->
+                        call_write(String(big_size));
+                }
+            }
+        }
 
         Vector<int> configuration = configurations[m];
         int duration = durations[m]; // microseconds
-#if defined(__osx__)
-        static mach_timebase_info_data_t sTimebaseInfo;
-        mach_timebase_info(&sTimebaseInfo);
-        uint64_t start_time = mach_absolute_time();
-#elif defined(__linux__)
         struct timespec start_time;
         clock_gettime(CLOCK_MONOTONIC, &start_time);
-#endif
 
         // set configuration
         for(int i = 0; i < _num_hosts; i++) {
-	    int dst = i;
+            int dst = i;
             int src = configuration[i];
-	    _pull_switch[dst]->call_write(String(src));
+            _pull_switch[dst]->call_write(String(src));
 
             // probably just remove this? we aren't signaling TCP to dump.
-	    // sprintf(handler, "hybrid_switch/ecnr%d/s.switch %d", dst, src);
+            // sprintf(handler, "hybrid_switch/ecnr%d/s.switch %d", dst, src);
             // HandlerCall::call_write(handler, this);
         }
 
         // wait duration
         long long elapsed_nano = 0;
 
-#if defined(__osx__)
-        uint64_t ts_new;
-
-        while (elapsed_nano < duration * 1000) {
-            ts_new = mach_absolute_time();
-            elapsed_nano = (ts_new - start_time) *
-                sTimebaseInfo.numer / sTimebaseInfo.denom;
-        }
-        start_time = ts_new;
-#elif defined(__linux__)
         struct timespec ts_new;
 
         while (elapsed_nano < duration * 1000) {
@@ -259,35 +239,33 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 - (1000000000 * start_time.tv_sec + start_time.tv_nsec);
         }    
         start_time = ts_new;
-#else
-        errh->error("only implemented for linux and osx");
-        return -1;
-#endif
 
-	// make this days buffers smaller
-	if(resize) {
-	    for(int i = 0; i < _num_hosts; i++) {
-		int dst = i;
-		int src = configuration[i];
-		if (src == -1)
-		    continue;
-		_queue_capacity[src * _num_hosts + dst]->call_write(String(small_size));
-	    }
-	}
+        // make this days buffers smaller
+        if(resize) {
+            for(int i = 0; i < _num_hosts; i++) {
+                int dst = i;
+                int src = configuration[i];
+                if (src == -1)
+                    continue;
+                _queue_capacity[src * _num_hosts + dst]->
+                    call_write(String(small_size));
+            }
+        }
 
-	// resize buffer if needed
-	// if(resize) {
-	//     for(int i = 0; i < _num_hosts; i++) {
-	// 	int dst = i;
-	// 	int src = configuration[i];
-	// 	if (src == -1)
-	// 	    continue;
-	// 	buffer_times[src * _num_hosts + dst]--;
-	// 	if (buffer_times[src * _num_hosts + dst] == 0) {
-	// 	    _queue_capacity[src * _num_hosts + dst]->call_write(String(small_size));
-	// 	}
-	//     }
-	// }
+        // resize buffer if needed
+        // if(resize) {
+        //     for(int i = 0; i < _num_hosts; i++) {
+        //         int dst = i;
+        //         int src = configuration[i];
+        //         if (src == -1)
+        //             continue;
+        //         buffer_times[src * _num_hosts + dst]--;
+        //         if (buffer_times[src * _num_hosts + dst] == 0) {
+        //             _queue_capacity[src * _num_hosts + dst]->
+        //                 call_write(String(small_size));
+        //         }
+        //     }
+        // }
     }    
     free(durations);
     // free(buffer_times);
@@ -295,12 +273,12 @@ RunSchedule::execute_schedule(ErrorHandler *)
 }
 
 void
-RunSchedule::run_timer(Timer *)
+RunSchedule::run_task(Task *)
 {
     while(1) {
         int rc = execute_schedule(ErrorHandler::default_handler());
-        if (rc)
-            return;
+        // if (rc)
+        //     return;
     }
 }
 

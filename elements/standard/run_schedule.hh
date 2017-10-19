@@ -34,7 +34,7 @@ class RunSchedule : public Element {
     int initialize(ErrorHandler *) CLICK_COLD;
     void add_handlers() CLICK_COLD;
 
-    void run_timer(Timer *);
+    void run_task(Task *);
 
     String next_schedule;
     bool do_resize;
@@ -47,7 +47,7 @@ class RunSchedule : public Element {
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
-    Timer _timer;
+    Task _task;
     int _num_hosts;
     int _big_buffer_size;
     int _small_buffer_size;

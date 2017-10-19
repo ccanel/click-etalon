@@ -32,7 +32,7 @@ class Solstice : public Element {
     int initialize(ErrorHandler *) CLICK_COLD;
     void add_handlers() CLICK_COLD;
 
-    void run_timer(Timer *);
+    void run_task(Task *);
 
     bool enabled;
 
@@ -41,7 +41,7 @@ class Solstice : public Element {
 
     sols_t _s;
     long long *_traffic_matrix;
-    Timer _timer;
+    Task _task;
     int _num_hosts;
     int _print;
     int _print2;
