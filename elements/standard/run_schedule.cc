@@ -102,7 +102,7 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     if (rs->do_resize && rs->do_resize != current) {
         // get sizes based on queues sizes
         rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-        rs->_small_buffer_size = rs->_big_buffer_size / 10; //* 10;
+        rs->_small_buffer_size = rs->_big_buffer_size / 4; //* 10;
         if (rs->_small_buffer_size < 1) {
             rs->_small_buffer_size = 1;
         }
