@@ -142,6 +142,16 @@ RunSchedule::execute_schedule(ErrorHandler *)
     int big_size = _big_buffer_size;
     pthread_mutex_unlock(&lock);
 
+    if(!do_resize) {
+        // reset all queues back to large size
+        for(int i = 0; i < _num_hosts; i++) {
+            for (int j = 0; j < _num_hosts; j++) {
+                _queue_capacity[i * _num_hosts + j]->
+                    call_write(String(big_size));
+            }
+        }
+    }
+        
     _print = (_print+1) % 100;
     if (!_print) {
         printf("running sched %s\n", current_schedule.c_str());
