@@ -185,7 +185,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     // }
 
     // make first days buffers big
-    int DAYS_OUT = 2;
+    int DAYS_OUT = 4;
     // if(resize) {
     // 	for(int k = 0; k < DAYS_OUT; k++) {
     // 	    for(int i = 0; i < _num_hosts; i++) {
@@ -212,6 +212,14 @@ RunSchedule::execute_schedule(ErrorHandler *)
                         call_write(String(big_size));
                 }
             }
+        }
+
+        if (m == 4) {
+            // int len = atoi(HandlerCall::call_read("hybrid_switch/q12/q.length",
+            //                                       this).c_str());
+            // int cap = atoi(HandlerCall::call_read("hybrid_switch/q12/q.capacity",
+            //                                       this).c_str());
+            // printf("config 4: %d %d\n", len, cap);
         }
 
         Vector<int> configuration = configurations[m];
@@ -290,7 +298,7 @@ bool
 RunSchedule::run_task(Task *)
 {
     while(1) {
-        int rc = execute_schedule(ErrorHandler::default_handler());
+        execute_schedule(ErrorHandler::default_handler());
         // if (rc)
         //     return;
     }
