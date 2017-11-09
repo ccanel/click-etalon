@@ -35,9 +35,9 @@ int
 HSLog::initialize(ErrorHandler* errh)
 {
     _q12_len = new HandlerCall("hybrid_switch/q12/q.length");
-    _q12_len = initialize(HandlerCall::f_read, this, errh);
+    _q12_len->initialize(HandlerCall::f_read, this, errh);
     _q12_cap = new HandlerCall("hybrid_switch/q12/q.capacity");
-    _q12_cap = initialize(HandlerCall::f_read, this, errh);
+    _q12_cap->initialize(HandlerCall::f_read, this, errh);
     
     if (open_log("/tmp/hslog.log"))
     	return 1;
