@@ -1,0 +1,283 @@
+// -*- c-basic-offset: 4 -*-
+/*
+ * frontresizequeue.{cc,hh} -- queue element that drops from front on resize
+ * Eddie Kohler
+ *
+ * Copyright (c) 1999-2000 Massachusetts Institute of Technology
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, subject to the conditions
+ * listed in the Click LICENSE file. These conditions include: you must
+ * preserve this copyright notice, and you cannot mention the copyright
+ * holders in advertising related to the Software without their permission.
+ * The Software is provided WITHOUT ANY WARRANTY, EXPRESS OR IMPLIED. This
+ * notice is a summary of the Click LICENSE file; the license in that file is
+ * legally binding.
+ */
+
+#include <click/config.h>
+#include "frontresizequeue.hh"
+#include <click/confparse.hh>
+#include <click/error.hh>
+#include <clicknet/tcp.h>
+#include <clicknet/udp.h>
+CLICK_DECLS
+
+FrontResizeQueue::FrontResizeQueue()
+{
+}
+
+void *
+FrontResizeQueue::cast(const char *n)
+{
+  if (strcmp(n, "FrontResizeQueue") == 0)
+    return (FrontResizeQueue *)this;
+  else
+    return NotifierQueue::cast(n);
+}
+
+int
+FrontResizeQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
+{
+  // printf("resizing\n");
+  // change the maximum queue length at runtime
+  Storage::index_type old_capacity = _capacity;
+  int old_len = size();
+  if (configure(conf, errh) < 0)
+    return -1;
+  if (_capacity == old_capacity || !_q)
+    return 0;
+  Storage::index_type new_capacity = _capacity;
+  _capacity = old_capacity;
+
+  Packet **new_q = (Packet **) CLICK_LALLOC(sizeof(Packet *) * (new_capacity + 1));
+  if (new_q == 0)
+    return errh->error("out of memory");
+
+
+  // // printf("building\n");
+  // // build new ft list
+  // five_tuple_list *ftl = NULL;
+  // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
+  //     // printf("getting ft\n");
+  //     five_tuple_list *ft = get_ft(_q[k]);
+  //     // printf("adding ft\n");
+  //     add_ft_if_not_in_list(&ftl, ft);
+  // }
+  // // printf("done building\n");
+
+  // // printf("dropping\n");
+  // // create new queue by selectively dropping packets
+  // Storage::index_type i = tail(), j = new_capacity;
+  // while (j != 0 && i != head()) {
+  //     i = prev_i(i);
+  //     five_tuple_list *ft = get_ft(_q[i]);
+  //     five_tuple_list *p = get_ft_in_list(ftl, ft);
+  //     free(ft);
+  //     if (p == NULL) {
+  // 	  if (name() == "hybrid_switch/q12/q") {
+  // 	      printf("RESIZE BROKEN, %p\n", ftl);
+  // 	  }
+  // 	  continue;
+  //     }
+  //     if (_capacity > old_capacity || p->count < 4) {
+  // 	  --j;
+  // 	  new_q[j] = _q[i];
+  //     } else {
+  // 	  _q[i]->kill();
+  //     }
+  // }
+  // // printf("done dropping\n");
+
+  Storage::index_type i = tail(), j = new_capacity;
+  while (j != 0 && i != head()) {
+      i = prev_i(i);
+      --j;
+      new_q[j] = _q[i];
+  }
+  while (i != head()) {
+      i = prev_i(i);
+      _q[i]->kill();
+  }
+
+  // printf("normal\n");
+  CLICK_LFREE(_q, sizeof(Packet *) * (_capacity + 1));
+  _q = new_q;
+  set_head(j);
+  set_tail(new_capacity);
+  _capacity = new_capacity;
+  // printf("done normal\n");
+
+  // // printf("clearing\n");
+  // // clear out old ft list
+  // for(five_tuple_list *p = ftl; p != NULL;) {
+  //     five_tuple_list *old = p;
+  //     p = p->next;
+  //     free(old);
+  // }
+  // // printf("done clear\n");
+
+  if (name() == "hybrid_switch/q12/q") {
+      printf("name = %s, old_len = %d, len = %d, cap = %d\n", name().c_str(), old_len, size(), _capacity);
+  }
+
+  // printf("done resizing\n");
+  return 0;
+}
+
+five_tuple_list *FrontResizeQueue::get_ft(Packet *p) {
+    five_tuple_list *ft = (five_tuple_list*)malloc(sizeof(five_tuple_list));
+    ft->transport = 0;
+    ft->next = 0;
+    ft->count = 0;
+	  
+    const click_ip *ipp = p->ip_header();
+    if (ipp->ip_p == IP_PROTO_TCP) { // TCP
+	ft->sport = p->tcp_header()->th_sport;
+	ft->dport = p->tcp_header()->th_dport;
+	ft->transport = 1;
+    } else if (ipp->ip_p == IP_PROTO_UDP) { // UDP
+	ft->sport = p->udp_header()->uh_sport;
+	ft->dport = p->udp_header()->uh_dport;
+	ft->transport = 2;
+    }
+    ft->ip_src = ipp->ip_src;
+    ft->ip_dst = ipp->ip_dst;
+    return ft;
+}
+
+five_tuple_list *FrontResizeQueue::get_ft_in_list(five_tuple_list* ftl,
+						  five_tuple_list* ft) {
+    for(five_tuple_list *p = ftl; p != NULL; p = p->next) {
+	if (same_ft(p, ft))
+	    return p;
+    }
+    return NULL;
+}
+
+bool FrontResizeQueue::same_ft(five_tuple_list* ft, five_tuple_list* other) {
+    if (ft->ip_src == other->ip_src &&
+	ft->ip_dst == other->ip_dst &&
+	ft->sport == other->sport &&
+	ft->dport == other->dport &&
+	ft->transport == other->transport)
+	return true;
+    return false;
+}
+
+void FrontResizeQueue::add_ft_if_not_in_list(five_tuple_list** ftl,
+					     five_tuple_list* ft) {
+    if (*ftl == NULL) {
+	*ftl = ft;
+    } else {
+	five_tuple_list *p;
+	for(p = *ftl; p != NULL; p = p->next) {
+	    if (same_ft(p, ft))
+		break;
+	}
+	if (p == NULL) { // didn't find ft in list
+	    for(p = *ftl; p->next != NULL; p = p->next) {}
+	    p->next = ft;
+	} else {
+	    free(ft);
+	}
+    }
+}
+
+void FrontResizeQueue::add_ft_count_in_list(five_tuple_list** ftl,
+					    five_tuple_list* ft) {
+    if (*ftl == NULL) {
+	*ftl = ft;
+	ft->count = 1;
+    } else {
+	five_tuple_list *p;
+	for(p = *ftl; p != NULL; p = p->next) {
+	    if (same_ft(p, ft))
+		break;
+	}
+	if (p == NULL) { // didn't find ft in list
+	    for(p = *ftl; p->next != NULL; p = p->next) {}
+	    p->next = ft;
+	    ft->count = 1;
+	} else {
+	    p->count++;
+	    free(ft);
+	}
+    }
+}
+
+void
+FrontResizeQueue::take_state(Element *e, ErrorHandler *errh)
+{
+    SimpleQueue *q = (SimpleQueue *)e->cast("SimpleQueue");
+    if (!q)
+	return;
+
+    if (tail() != head() || head() != 0) {
+	errh->error("already have packets enqueued, can%,t take state");
+	return;
+    }
+
+    set_tail(_capacity);
+    Storage::index_type i = _capacity, j = q->tail();
+    while (i > 0 && j != q->head()) {
+	i--;
+	j = q->prev_i(j);
+	_q[i] = q->packet(j);
+    }
+    set_head(i);
+    _highwater_length = size();
+
+    if (j != q->head())
+	errh->warning("some packets lost (old length %d, new capacity %d)",
+		      q->size(), _capacity);
+    while (j != q->head()) {
+	j = q->prev_i(j);
+	q->packet(j)->kill();
+    }
+    q->set_head(0);
+    q->set_tail(0);
+}
+
+void
+FrontResizeQueue::push(int, Packet *p)
+{
+    pthread_mutex_lock(&_lock);
+    // Code taken from SimpleQueue::push().
+    Storage::index_type h = head(), t = tail(), nt = next_i(t);
+
+    // float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+    float r = 0.5;
+    float s = (float)size();
+    int d = _capacity;
+    if (r < s / d) {
+	if (WritablePacket *q = p->uniqueify()) {
+	    q->ip_header()->ip_tos |= IP_ECN_CE;
+	    p = q;
+	    // printf("set ECN, %f, %f, %d, %f\n", r, s, d, s/d);
+	}
+    }
+
+    // five_tuple_list *ftl = NULL;
+    // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
+    // 	// printf("getting ft\n");
+    // 	five_tuple_list *ft = get_ft(_q[k]);
+    // 	// printf("adding ft\n");
+    // 	add_ft_count_in_list(&ftl, ft);
+    // }
+
+    // five_tuple_list *ft = get_ft_in_list(ftl, get_ft(p));
+    if ((nt != h)) { //&& (!ft || _capacity >= 100 || ft->count < 4)) {
+        push_success(h, t, nt, p);
+        enqueue_bytes += p->length();
+    }
+    else {
+	push_failure(p);
+    }
+    pthread_mutex_unlock(&_lock);
+}
+
+CLICK_ENDDECLS
+ELEMENT_REQUIRES(FullNoteQueue)
+EXPORT_ELEMENT(FrontResizeQueue)

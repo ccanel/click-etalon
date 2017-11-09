@@ -69,12 +69,36 @@ RunSchedule::initialize(ErrorHandler *errh)
                            this, errh);
         }
     }
+
+    _queue_sizes = (int *)malloc(sizeof(int) * _num_hosts * _num_hosts);
+    for(int src = 0; src < _num_hosts; src++) {
+	for(int dst = 0; dst < _num_hosts; dst++) {
+	    _queue_sizes[src * _num_hosts + dst] = -1;
+	}
+    }
+
     _pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
         char handler[500];
         sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst+1);
         _pull_switch[dst] = new HandlerCall(handler);
         _pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
+    }
+
+    _circuit_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
+    for(int dst = 0; dst < _num_hosts; dst++) {
+	char handler[500];
+	sprintf(handler, "hybrid_switch/coc%d.color", dst+1);
+	_circuit_label[dst] = new HandlerCall(handler);
+	_circuit_label[dst]->initialize(HandlerCall::f_write, this, errh);
+    }
+
+    _packet_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
+    for(int dst = 0; dst < _num_hosts; dst++) {
+	char handler[500];
+	sprintf(handler, "hybrid_switch/cop%d.color", dst+1);
+	_packet_label[dst] = new HandlerCall(handler);
+	_packet_label[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
     return 0;
@@ -145,7 +169,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
         
     _print = (_print+1) % 100;
     if (!_print) {
-        printf("running sched %s\n", current_schedule.c_str());
+	if (current_schedule)
+	    printf("running sched %s\n", current_schedule.c_str());
     }
     
     if (current_schedule == "")
@@ -185,7 +210,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     // }
 
     // make first days buffers big
-    int DAYS_OUT = 4;
+    int DAYS_OUT = 8;
     // if(resize) {
     // 	for(int k = 0; k < DAYS_OUT; k++) {
     // 	    for(int i = 0; i < _num_hosts; i++) {
@@ -202,24 +227,30 @@ RunSchedule::execute_schedule(ErrorHandler *)
     for(int m = 0; m < num_configurations; m++) {
         // make next days buffer big
         if(resize) {
+            // for(int k = -1 * DAYS_OUT; k <= DAYS_OUT; k++) {
             for(int k = 0; k <= DAYS_OUT; k++) {
                 for(int i = 0; i < _num_hosts; i++) {
                     int dst = i;
-                    int src = configurations[(m+k) % num_configurations][i];
+		    int index = (m + k) % num_configurations;
+		    index = index < 0 ? index + num_configurations : index;
+                    int src = configurations[index][i];
                     if (src == -1)
                         continue;
-                    _queue_capacity[src * _num_hosts + dst]->
-                        call_write(String(big_size));
+		    if (_queue_sizes[src * _num_hosts + dst] != big_size) {
+			_queue_capacity[src * _num_hosts + dst]->
+			    call_write(String(big_size));
+		    }
+		    _queue_sizes[src * _num_hosts + dst] = big_size;
                 }
             }
         }
 
-        if (m == 4) {
-            // int len = atoi(HandlerCall::call_read("hybrid_switch/q12/q.length",
-            //                                       this).c_str());
-            // int cap = atoi(HandlerCall::call_read("hybrid_switch/q12/q.capacity",
-            //                                       this).c_str());
-            // printf("config 4: %d %d\n", len, cap);
+        if (!_print && m == 12) {
+            int len = atoi(HandlerCall::call_read("hybrid_switch/q12/q.length",
+                                                  this).c_str());
+            int cap = atoi(HandlerCall::call_read("hybrid_switch/q12/q.capacity",
+                                                  this).c_str());
+            printf("config 12: %d %d\n", len, cap);
         }
 
         Vector<int> configuration = configurations[m];
@@ -232,6 +263,9 @@ RunSchedule::execute_schedule(ErrorHandler *)
             int dst = i;
             int src = configuration[i];
             _pull_switch[dst]->call_write(String(src));
+
+	    _circuit_label[dst]->call_write(String(src+1));
+	    _packet_label[dst]->call_write(String(src+1));
 
             // probably just remove this? we aren't signaling TCP to dump.
             // sprintf(handler, "hybrid_switch/ecnr%d/s.switch %d", dst, src);
@@ -250,15 +284,33 @@ RunSchedule::execute_schedule(ErrorHandler *)
         }    
         start_time = ts_new;
 
-        // make this days buffers smaller
+        // make this -DAYS_OUT buffers smaller
+	// only if this (src, dst) pair isn't in the next k configs
         if(resize) {
             for(int i = 0; i < _num_hosts; i++) {
                 int dst = i;
-                int src = configuration[i];
+		int k = 0; //-1 * DAYS_OUT;
+		int index = (m + k) % num_configurations;
+		index = index < 0 ? index + num_configurations : index;
+                int src = configurations[index][i];
+		bool not_found = true;
+		// for (k = -1 * DAYS_OUT + 1; k <= DAYS_OUT; k++) {
+		for (k = 1; k <= DAYS_OUT; k++) {
+		    index = (m + k) % num_configurations;
+		    index = index < 0 ? index + num_configurations : index;
+		    int src2 = configurations[index][i];
+		    if (src == src2)
+			not_found = false;
+		}
                 if (src == -1)
                     continue;
-                _queue_capacity[src * _num_hosts + dst]->
-                    call_write(String(small_size));
+		if (not_found) {
+		    if (_queue_sizes[src * _num_hosts + dst] != small_size) {
+			_queue_capacity[src * _num_hosts + dst]->
+			    call_write(String(small_size));
+		    }
+		    _queue_sizes[src * _num_hosts + dst] = small_size;
+		}
             }
         }
 
@@ -284,8 +336,11 @@ RunSchedule::execute_schedule(ErrorHandler *)
         // reset all queues back to large size
         for(int i = 0; i < _num_hosts; i++) {
             for (int j = 0; j < _num_hosts; j++) {
-                _queue_capacity[i * _num_hosts + j]->
-                    call_write(String(big_size));
+		if (_queue_sizes[i * _num_hosts + j] != big_size) {
+		    _queue_capacity[i * _num_hosts + j]->
+			call_write(String(big_size));
+		}
+		_queue_sizes[i * _num_hosts + j] = big_size;
             }
         }
     }
