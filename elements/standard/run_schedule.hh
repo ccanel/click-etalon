@@ -53,6 +53,7 @@ class RunSchedule : public Element {
     int _small_buffer_size;
     HandlerCall **_queue_capacity;
     HandlerCall **_pull_switch;
+    // HandlerCall **_packet_pull_switch;
     HandlerCall **_circuit_label;
     HandlerCall **_packet_label;
     int *_queue_sizes;

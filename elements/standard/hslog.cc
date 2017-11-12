@@ -82,6 +82,7 @@ HSLog::simple_action(Packet *p)
     // // bool have_circuit = dst == _circuit_dest[src];
     // bool have_circuit = src == _circuit_dest[dst];
     // if (have_circuit) {
+    // if ((float)len / cap > .5) {
     // 	if (WritablePacket *q = p->uniqueify()) {
     // 	    q->ip_header()->ip_tos |= IP_ECN_CE;
     // 	    p = q;

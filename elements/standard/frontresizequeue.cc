@@ -240,43 +240,43 @@ FrontResizeQueue::take_state(Element *e, ErrorHandler *errh)
     q->set_tail(0);
 }
 
-void
-FrontResizeQueue::push(int, Packet *p)
-{
-    pthread_mutex_lock(&_lock);
-    // Code taken from SimpleQueue::push().
-    Storage::index_type h = head(), t = tail(), nt = next_i(t);
+// void
+// FrontResizeQueue::push(int, Packet *p)
+// {
+//     pthread_mutex_lock(&_lock);
+//     // Code taken from SimpleQueue::push().
+//     Storage::index_type h = head(), t = tail(), nt = next_i(t);
 
-    // float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-    float r = 0.5;
-    float s = (float)size();
-    int d = _capacity;
-    if (r < s / d) {
-	if (WritablePacket *q = p->uniqueify()) {
-	    q->ip_header()->ip_tos |= IP_ECN_CE;
-	    p = q;
-	    // printf("set ECN, %f, %f, %d, %f\n", r, s, d, s/d);
-	}
-    }
+//     // // float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+//     // float r = 0.5;
+//     // float s = (float)size();
+//     // int d = _capacity;
+//     // if (r < s / d) {
+//     // 	if (WritablePacket *q = p->uniqueify()) {
+//     // 	    q->ip_header()->ip_tos |= IP_ECN_CE;
+//     // 	    p = q;
+//     // 	    // printf("set ECN, %f, %f, %d, %f\n", r, s, d, s/d);
+//     // 	}
+//     // }
 
-    // five_tuple_list *ftl = NULL;
-    // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
-    // 	// printf("getting ft\n");
-    // 	five_tuple_list *ft = get_ft(_q[k]);
-    // 	// printf("adding ft\n");
-    // 	add_ft_count_in_list(&ftl, ft);
-    // }
+//     // five_tuple_list *ftl = NULL;
+//     // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
+//     // 	// printf("getting ft\n");
+//     // 	five_tuple_list *ft = get_ft(_q[k]);
+//     // 	// printf("adding ft\n");
+//     // 	add_ft_count_in_list(&ftl, ft);
+//     // }
 
-    // five_tuple_list *ft = get_ft_in_list(ftl, get_ft(p));
-    if ((nt != h)) { //&& (!ft || _capacity >= 100 || ft->count < 4)) {
-        push_success(h, t, nt, p);
-        enqueue_bytes += p->length();
-    }
-    else {
-	push_failure(p);
-    }
-    pthread_mutex_unlock(&_lock);
-}
+//     // five_tuple_list *ft = get_ft_in_list(ftl, get_ft(p));
+//     if ((nt != h)) { //&& (!ft || _capacity >= 100 || ft->count < 4)) {
+//         push_success(h, t, nt, p);
+//         enqueue_bytes += p->length();
+//     }
+//     else {
+// 	push_failure(p);
+//     }
+//     pthread_mutex_unlock(&_lock);
+// }
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(FullNoteQueue)

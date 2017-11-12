@@ -85,6 +85,18 @@ RunSchedule::initialize(ErrorHandler *errh)
         _pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
+    // _packet_pull_switch = (HandlerCall **)malloc(sizeof(HandlerCall *) * \
+    // 						 _num_hosts * _num_hosts);
+    // for(int src = 0; src < _num_hosts; src++) {
+    //     for(int dst = 0; dst < _num_hosts; dst++) {
+    //         char handler[500];
+    //         sprintf(handler, "hybrid_switch/packet_up_link%d/ps%d.switch", dst+1, src+1);
+    //         _packet_pull_switch[src * _num_hosts + dst] = new HandlerCall(handler);
+    //         _packet_pull_switch[src * _num_hosts + dst]->
+    //             initialize(HandlerCall::f_write, this, errh);
+    //     }
+    // }
+
     _circuit_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
 	char handler[500];
@@ -126,7 +138,7 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     if (rs->do_resize && rs->do_resize != current) {
         // get sizes based on queues sizes
         rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-        rs->_small_buffer_size = rs->_big_buffer_size / 4; //* 10;
+        rs->_small_buffer_size = rs->_big_buffer_size / 4;
         if (rs->_small_buffer_size < 1) {
             rs->_small_buffer_size = 1;
         }
@@ -210,7 +222,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     // }
 
     // make first days buffers big
-    int DAYS_OUT = 8;
+    int DAYS_OUT = 2;
     // if(resize) {
     // 	for(int k = 0; k < DAYS_OUT; k++) {
     // 	    for(int i = 0; i < _num_hosts; i++) {
@@ -267,6 +279,9 @@ RunSchedule::execute_schedule(ErrorHandler *)
 	    _circuit_label[dst]->call_write(String(src+1));
 	    _packet_label[dst]->call_write(String(src+1));
 
+	    // if (src != -1)
+	    // 	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(-1));
+
             // probably just remove this? we aren't signaling TCP to dump.
             // sprintf(handler, "hybrid_switch/ecnr%d/s.switch %d", dst, src);
             // HandlerCall::call_write(handler, this);
@@ -283,6 +298,14 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 - (1000000000 * start_time.tv_sec + start_time.tv_nsec);
         }    
         start_time = ts_new;
+
+	// // re-enable packet switch
+        // for(int i = 0; i < _num_hosts; i++) {
+	//     int dst = i;
+        //     int src = configuration[i];
+	//     if (src != -1)
+	// 	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
+        // }
 
         // make this -DAYS_OUT buffers smaller
 	// only if this (src, dst) pair isn't in the next k configs

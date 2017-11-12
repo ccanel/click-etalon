@@ -73,7 +73,7 @@ class FrontResizeQueue : public FullNoteQueue { public:
   void add_ft_if_not_in_list(five_tuple_list**, five_tuple_list*);
   void add_ft_count_in_list(five_tuple_list**, five_tuple_list*);
 
-  void push(int, Packet*);
+  // void push(int, Packet*);
 };
 
 CLICK_ENDDECLS
