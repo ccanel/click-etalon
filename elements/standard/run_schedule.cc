@@ -38,8 +38,8 @@ RunSchedule::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (Args(conf, this, errh)
         .read_mp("NUM_HOSTS", _num_hosts)
-        .read_mp("BIG_BUFFER_SIZE", _big_buffer_size)
-        .read_mp("SMALL_BUFFER_SIZE", _small_buffer_size)
+        // .read_mp("BIG_BUFFER_SIZE", _big_buffer_size)
+        // .read_mp("SMALL_BUFFER_SIZE", _small_buffer_size)
         .read_mp("RESIZE", do_resize)
         .complete() < 0)
         return -1;
