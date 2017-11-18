@@ -63,8 +63,9 @@ class FrontResizeQueue : public FullNoteQueue { public:
 
   const char *class_name() const		{ return "FrontResizeQueue"; }
   void *cast(const char *);
+  void add_handlers() CLICK_COLD;
 
-  int live_reconfigure(Vector<String> &, ErrorHandler *);
+  // int live_reconfigure(Vector<String> &, ErrorHandler *);
   void take_state(Element *, ErrorHandler *);
 
   five_tuple_list *get_ft(Packet*);
@@ -73,7 +74,12 @@ class FrontResizeQueue : public FullNoteQueue { public:
   void add_ft_if_not_in_list(five_tuple_list**, five_tuple_list*);
   void add_ft_count_in_list(five_tuple_list**, five_tuple_list*);
 
-  // void push(int, Packet*);
+  static int change_mark_fraction(const String&, Element*, void*, ErrorHandler*);
+  static String get_mark_fraction(Element *e, void *user_data);
+
+  void push(int, Packet*);
+
+  float _mark_fraction;
 };
 
 CLICK_ENDDECLS

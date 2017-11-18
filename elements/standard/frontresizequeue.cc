@@ -26,6 +26,7 @@ CLICK_DECLS
 
 FrontResizeQueue::FrontResizeQueue()
 {
+    _mark_fraction = 0.5;
 }
 
 void *
@@ -37,94 +38,94 @@ FrontResizeQueue::cast(const char *n)
     return NotifierQueue::cast(n);
 }
 
-int
-FrontResizeQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
-{
-  // printf("resizing\n");
-  // change the maximum queue length at runtime
-  Storage::index_type old_capacity = _capacity;
-  int old_len = size();
-  if (configure(conf, errh) < 0)
-    return -1;
-  if (_capacity == old_capacity || !_q)
-    return 0;
-  Storage::index_type new_capacity = _capacity;
-  _capacity = old_capacity;
+// int
+// FrontResizeQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
+// {
+//   // printf("resizing\n");
+//   // change the maximum queue length at runtime
+//   Storage::index_type old_capacity = _capacity;
+//   int old_len = size();
+//   if (configure(conf, errh) < 0)
+//     return -1;
+//   if (_capacity == old_capacity || !_q)
+//     return 0;
+//   Storage::index_type new_capacity = _capacity;
+//   _capacity = old_capacity;
 
-  Packet **new_q = (Packet **) CLICK_LALLOC(sizeof(Packet *) * (new_capacity + 1));
-  if (new_q == 0)
-    return errh->error("out of memory");
+//   Packet **new_q = (Packet **) CLICK_LALLOC(sizeof(Packet *) * (new_capacity + 1));
+//   if (new_q == 0)
+//     return errh->error("out of memory");
 
 
-  // // printf("building\n");
-  // // build new ft list
-  // five_tuple_list *ftl = NULL;
-  // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
-  //     // printf("getting ft\n");
-  //     five_tuple_list *ft = get_ft(_q[k]);
-  //     // printf("adding ft\n");
-  //     add_ft_if_not_in_list(&ftl, ft);
-  // }
-  // // printf("done building\n");
+//   // // printf("building\n");
+//   // // build new ft list
+//   // five_tuple_list *ftl = NULL;
+//   // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
+//   //     // printf("getting ft\n");
+//   //     five_tuple_list *ft = get_ft(_q[k]);
+//   //     // printf("adding ft\n");
+//   //     add_ft_if_not_in_list(&ftl, ft);
+//   // }
+//   // // printf("done building\n");
 
-  // // printf("dropping\n");
-  // // create new queue by selectively dropping packets
-  // Storage::index_type i = tail(), j = new_capacity;
-  // while (j != 0 && i != head()) {
-  //     i = prev_i(i);
-  //     five_tuple_list *ft = get_ft(_q[i]);
-  //     five_tuple_list *p = get_ft_in_list(ftl, ft);
-  //     free(ft);
-  //     if (p == NULL) {
-  // 	  if (name() == "hybrid_switch/q12/q") {
-  // 	      printf("RESIZE BROKEN, %p\n", ftl);
-  // 	  }
-  // 	  continue;
-  //     }
-  //     if (_capacity > old_capacity || p->count < 4) {
-  // 	  --j;
-  // 	  new_q[j] = _q[i];
-  //     } else {
-  // 	  _q[i]->kill();
-  //     }
-  // }
-  // // printf("done dropping\n");
+//   // // printf("dropping\n");
+//   // // create new queue by selectively dropping packets
+//   // Storage::index_type i = tail(), j = new_capacity;
+//   // while (j != 0 && i != head()) {
+//   //     i = prev_i(i);
+//   //     five_tuple_list *ft = get_ft(_q[i]);
+//   //     five_tuple_list *p = get_ft_in_list(ftl, ft);
+//   //     free(ft);
+//   //     if (p == NULL) {
+//   // 	  if (name() == "hybrid_switch/q12/q") {
+//   // 	      printf("RESIZE BROKEN, %p\n", ftl);
+//   // 	  }
+//   // 	  continue;
+//   //     }
+//   //     if (_capacity > old_capacity || p->count < 4) {
+//   // 	  --j;
+//   // 	  new_q[j] = _q[i];
+//   //     } else {
+//   // 	  _q[i]->kill();
+//   //     }
+//   // }
+//   // // printf("done dropping\n");
 
-  Storage::index_type i = tail(), j = new_capacity;
-  while (j != 0 && i != head()) {
-      i = prev_i(i);
-      --j;
-      new_q[j] = _q[i];
-  }
-  while (i != head()) {
-      i = prev_i(i);
-      _q[i]->kill();
-  }
+//   Storage::index_type i = tail(), j = new_capacity;
+//   while (j != 0 && i != head()) {
+//       i = prev_i(i);
+//       --j;
+//       new_q[j] = _q[i];
+//   }
+//   while (i != head()) {
+//       i = prev_i(i);
+//       _q[i]->kill();
+//   }
 
-  // printf("normal\n");
-  CLICK_LFREE(_q, sizeof(Packet *) * (_capacity + 1));
-  _q = new_q;
-  set_head(j);
-  set_tail(new_capacity);
-  _capacity = new_capacity;
-  // printf("done normal\n");
+//   // printf("normal\n");
+//   CLICK_LFREE(_q, sizeof(Packet *) * (_capacity + 1));
+//   _q = new_q;
+//   set_head(j);
+//   set_tail(new_capacity);
+//   _capacity = new_capacity;
+//   // printf("done normal\n");
 
-  // // printf("clearing\n");
-  // // clear out old ft list
-  // for(five_tuple_list *p = ftl; p != NULL;) {
-  //     five_tuple_list *old = p;
-  //     p = p->next;
-  //     free(old);
-  // }
-  // // printf("done clear\n");
+//   // // printf("clearing\n");
+//   // // clear out old ft list
+//   // for(five_tuple_list *p = ftl; p != NULL;) {
+//   //     five_tuple_list *old = p;
+//   //     p = p->next;
+//   //     free(old);
+//   // }
+//   // // printf("done clear\n");
 
-  if (name() == "hybrid_switch/q12/q") {
-      printf("name = %s, old_len = %d, len = %d, cap = %d\n", name().c_str(), old_len, size(), _capacity);
-  }
+//   if (name() == "hybrid_switch/q12/q") {
+//       printf("name = %s, old_len = %d, len = %d, cap = %d\n", name().c_str(), old_len, size(), _capacity);
+//   }
 
-  // printf("done resizing\n");
-  return 0;
-}
+//   // printf("done resizing\n");
+//   return 0;
+// }
 
 five_tuple_list *FrontResizeQueue::get_ft(Packet *p) {
     five_tuple_list *ft = (five_tuple_list*)malloc(sizeof(five_tuple_list));
@@ -240,43 +241,72 @@ FrontResizeQueue::take_state(Element *e, ErrorHandler *errh)
     q->set_tail(0);
 }
 
-// void
-// FrontResizeQueue::push(int, Packet *p)
-// {
-//     pthread_mutex_lock(&_lock);
-//     // Code taken from SimpleQueue::push().
-//     Storage::index_type h = head(), t = tail(), nt = next_i(t);
+void
+FrontResizeQueue::push(int, Packet *p)
+{
+    pthread_mutex_lock(&_lock);
+    // Code taken from SimpleQueue::push().
+    Storage::index_type h = head(), t = tail(), nt = next_i(t);
 
-//     // // float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-//     // float r = 0.5;
-//     // float s = (float)size();
-//     // int d = _capacity;
-//     // if (r < s / d) {
-//     // 	if (WritablePacket *q = p->uniqueify()) {
-//     // 	    q->ip_header()->ip_tos |= IP_ECN_CE;
-//     // 	    p = q;
-//     // 	    // printf("set ECN, %f, %f, %d, %f\n", r, s, d, s/d);
-//     // 	}
-//     // }
+    // // float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+    // float r = 0.5;
+    float s = (float)size();
+    int d = _capacity;
+    // if (r < s / d) {
+    if (s > _mark_fraction * d) {
+    	if (WritablePacket *q = p->uniqueify()) {
+    	    q->ip_header()->ip_tos |= IP_ECN_CE;
+    	    p = q;
+    	    // printf("set ECN, %f, %f, %d, %f\n", r, s, d, s/d);
+    	}
+    }
 
-//     // five_tuple_list *ftl = NULL;
-//     // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
-//     // 	// printf("getting ft\n");
-//     // 	five_tuple_list *ft = get_ft(_q[k]);
-//     // 	// printf("adding ft\n");
-//     // 	add_ft_count_in_list(&ftl, ft);
-//     // }
+    // five_tuple_list *ftl = NULL;
+    // for (Storage::index_type k = head(); k != tail(); k = next_i(k)) {
+    // 	// printf("getting ft\n");
+    // 	five_tuple_list *ft = get_ft(_q[k]);
+    // 	// printf("adding ft\n");
+    // 	add_ft_count_in_list(&ftl, ft);
+    // }
 
-//     // five_tuple_list *ft = get_ft_in_list(ftl, get_ft(p));
-//     if ((nt != h)) { //&& (!ft || _capacity >= 100 || ft->count < 4)) {
-//         push_success(h, t, nt, p);
-//         enqueue_bytes += p->length();
-//     }
-//     else {
-// 	push_failure(p);
-//     }
-//     pthread_mutex_unlock(&_lock);
-// }
+    // five_tuple_list *ft = get_ft_in_list(ftl, get_ft(p));
+    if ((nt != h)) { //&& (!ft || _capacity >= 100 || ft->count < 4)) {
+        push_success(h, t, nt, p);
+        enqueue_bytes += p->length();
+    }
+    else {
+	push_failure(p);
+    }
+    pthread_mutex_unlock(&_lock);
+}
+
+int
+FrontResizeQueue::change_mark_fraction(const String &str, Element *e, void *, ErrorHandler *)
+{
+    FrontResizeQueue *frq = static_cast<FrontResizeQueue *>(e);
+    pthread_mutex_lock(&(frq->_lock));
+    frq->_mark_fraction = atof(str.c_str());
+    pthread_mutex_unlock(&(frq->_lock));
+    return 0;
+}
+
+String
+FrontResizeQueue::get_mark_fraction(Element *e, void *)
+{
+    FrontResizeQueue *frq = static_cast<FrontResizeQueue *>(e);
+    pthread_mutex_lock(&(frq->_lock));
+    int mf = frq->_mark_fraction;
+    pthread_mutex_unlock(&(frq->_lock));
+    return String(mf);
+}
+
+void
+FrontResizeQueue::add_handlers()
+{
+    FullNoteQueue::add_handlers();
+    add_write_handler("mark_fraction", change_mark_fraction, 0);
+    add_read_handler("mark_fraction", get_mark_fraction, 0);
+}
 
 CLICK_ENDDECLS
 ELEMENT_REQUIRES(FullNoteQueue)
