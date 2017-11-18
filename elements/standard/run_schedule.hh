@@ -51,8 +51,8 @@ class RunSchedule : public Element {
     int _num_hosts;
     // int _big_buffer_size;
     // int _small_buffer_size;
-    float _big_buffer_size;
-    float _small_buffer_size;
+    double _big_buffer_size;
+    double _small_buffer_size;
     HandlerCall **_queue_capacity;
     HandlerCall **_pull_switch;
     HandlerCall **_packet_pull_switch;
