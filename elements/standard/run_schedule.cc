@@ -62,7 +62,8 @@ RunSchedule::initialize(ErrorHandler *errh)
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
-            sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
+            // sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
+            sprintf(handler, "hybrid_switch/q%d%d/q.mark_fraction", src+1, dst+1);
             _queue_capacity[src * _num_hosts + dst] = new HandlerCall(handler);
             _queue_capacity[src * _num_hosts + dst]->
                 initialize(HandlerCall::f_read | HandlerCall::f_write,
@@ -85,17 +86,17 @@ RunSchedule::initialize(ErrorHandler *errh)
         _pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
-    // _packet_pull_switch = (HandlerCall **)malloc(sizeof(HandlerCall *) * \
-    // 						 _num_hosts * _num_hosts);
-    // for(int src = 0; src < _num_hosts; src++) {
-    //     for(int dst = 0; dst < _num_hosts; dst++) {
-    //         char handler[500];
-    //         sprintf(handler, "hybrid_switch/packet_up_link%d/ps%d.switch", dst+1, src+1);
-    //         _packet_pull_switch[src * _num_hosts + dst] = new HandlerCall(handler);
-    //         _packet_pull_switch[src * _num_hosts + dst]->
-    //             initialize(HandlerCall::f_write, this, errh);
-    //     }
-    // }
+    _packet_pull_switch = (HandlerCall **)malloc(sizeof(HandlerCall *) * \
+    						 _num_hosts * _num_hosts);
+    for(int src = 0; src < _num_hosts; src++) {
+        for(int dst = 0; dst < _num_hosts; dst++) {
+            char handler[500];
+            sprintf(handler, "hybrid_switch/packet_up_link%d/ps%d.switch", dst+1, src+1);
+            _packet_pull_switch[src * _num_hosts + dst] = new HandlerCall(handler);
+            _packet_pull_switch[src * _num_hosts + dst]->
+                initialize(HandlerCall::f_write, this, errh);
+        }
+    }
 
     _circuit_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
@@ -137,12 +138,15 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     BoolArg::parse(str, rs->do_resize, ArgContext());
     if (rs->do_resize && rs->do_resize != current) {
         // get sizes based on queues sizes
-        rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
+        // rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
+        rs->_big_buffer_size = atof(rs->_queue_capacity[0]->call_read().c_str());
         rs->_small_buffer_size = rs->_big_buffer_size / 4;
         if (rs->_small_buffer_size < 1) {
             rs->_small_buffer_size = 1;
         }
-        printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
+        // printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
+        //        rs->_big_buffer_size);
+        printf("auto resizing: %f -> %f\n", rs->_small_buffer_size,
                rs->_big_buffer_size);
     }
     pthread_mutex_unlock(&(rs->lock));
@@ -279,8 +283,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
 	    _circuit_label[dst]->call_write(String(src+1));
 	    _packet_label[dst]->call_write(String(src+1));
 
-	    // if (src != -1)
-	    // 	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(-1));
+	    if (src != -1)
+	    	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(-1));
 
             // probably just remove this? we aren't signaling TCP to dump.
             // sprintf(handler, "hybrid_switch/ecnr%d/s.switch %d", dst, src);
@@ -300,12 +304,12 @@ RunSchedule::execute_schedule(ErrorHandler *)
         start_time = ts_new;
 
 	// // re-enable packet switch
-        // for(int i = 0; i < _num_hosts; i++) {
-	//     int dst = i;
-        //     int src = configuration[i];
-	//     if (src != -1)
-	// 	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
-        // }
+        for(int i = 0; i < _num_hosts; i++) {
+	    int dst = i;
+            int src = configuration[i];
+	    if (src != -1)
+	    	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
+        }
 
         // make this -DAYS_OUT buffers smaller
 	// only if this (src, dst) pair isn't in the next k configs
