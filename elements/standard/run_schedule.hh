@@ -37,6 +37,7 @@ class RunSchedule : public Element {
     bool run_task(Task *);
 
     String next_schedule;
+    bool new_sched;
     bool do_resize;
     pthread_mutex_t lock;
 
@@ -49,10 +50,8 @@ class RunSchedule : public Element {
 
     Task _task;
     int _num_hosts;
-    // int _big_buffer_size;
-    // int _small_buffer_size;
-    double _big_buffer_size;
-    double _small_buffer_size;
+    int _big_buffer_size;
+    int _small_buffer_size;
     HandlerCall **_queue_capacity;
     HandlerCall **_pull_switch;
     HandlerCall **_packet_pull_switch;

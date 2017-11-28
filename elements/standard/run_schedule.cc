@@ -26,7 +26,7 @@
 
 CLICK_DECLS
 
-RunSchedule::RunSchedule() : _task(this), _num_hosts(0),
+RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
                              _big_buffer_size(100), _small_buffer_size(10),
                              _print(0)
 {
@@ -38,8 +38,6 @@ RunSchedule::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (Args(conf, this, errh)
         .read_mp("NUM_HOSTS", _num_hosts)
-        // .read_mp("BIG_BUFFER_SIZE", _big_buffer_size)
-        // .read_mp("SMALL_BUFFER_SIZE", _small_buffer_size)
         .read_mp("RESIZE", do_resize)
         .complete() < 0)
         return -1;
@@ -62,8 +60,8 @@ RunSchedule::initialize(ErrorHandler *errh)
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
-            // sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
-            sprintf(handler, "hybrid_switch/q%d%d/q.mark_fraction", src+1, dst+1);
+            sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
+            // sprintf(handler, "hybrid_switch/q%d%d/q.mark_fraction", src+1, dst+1);
             _queue_capacity[src * _num_hosts + dst] = new HandlerCall(handler);
             _queue_capacity[src * _num_hosts + dst]->
                 initialize(HandlerCall::f_read | HandlerCall::f_write,
@@ -91,7 +89,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
-            sprintf(handler, "hybrid_switch/packet_up_link%d/ps%d.switch", dst+1, src+1);
+            sprintf(handler, "hybrid_switch/pps%d%d.switch", src+1, dst+1);
             _packet_pull_switch[src * _num_hosts + dst] = new HandlerCall(handler);
             _packet_pull_switch[src * _num_hosts + dst]->
                 initialize(HandlerCall::f_write, this, errh);
@@ -123,6 +121,9 @@ RunSchedule::handler(const String &str, Element *e, void *, ErrorHandler *)
     RunSchedule *rs = static_cast<RunSchedule *>(e);
 
     pthread_mutex_lock(&(rs->lock));
+    if (rs->next_schedule != str) {
+	rs->new_sched = true;
+    }
     rs->next_schedule = String(str);
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -144,10 +145,10 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
         if (rs->_small_buffer_size < 1) {
             rs->_small_buffer_size = 1;
         }
-        // printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
-        //        rs->_big_buffer_size);
-        printf("auto resizing: %f -> %f\n", rs->_small_buffer_size,
+        printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
                rs->_big_buffer_size);
+        // printf("auto resizing: %f -> %f\n", rs->_small_buffer_size,
+        //        rs->_big_buffer_size);
     }
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -180,6 +181,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
     bool resize = do_resize;
     int small_size = _small_buffer_size;
     int big_size = _big_buffer_size;
+    bool new_s = new_sched;
+    new_sched = false;
     pthread_mutex_unlock(&lock);
 
         
@@ -207,6 +210,22 @@ RunSchedule::execute_schedule(ErrorHandler *)
         }
         j++;
     }
+
+    // re-enable packet switch
+    if (new_s && num_configurations == 1) {
+	for(int i = 0; i < _num_hosts; i++) {
+	    for(int j = 0; j < _num_hosts; j++) {
+		int dst = i;
+		int src = j;
+		if (configurations[0][i] == -1) {
+		    _packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
+		} else {
+		    _packet_pull_switch[src * _num_hosts + dst]->call_write(String(-1));
+		}
+	    }
+	}
+    }
+
 
     // at the beginning of the 'week' set all the buffers to full size
     // int *buffer_times = (int *)malloc(sizeof(int) * _num_hosts * _num_hosts);
@@ -261,13 +280,13 @@ RunSchedule::execute_schedule(ErrorHandler *)
             }
         }
 
-        if (!_print && m == 12) {
-            int len = atoi(HandlerCall::call_read("hybrid_switch/q12/q.length",
-                                                  this).c_str());
-            int cap = atoi(HandlerCall::call_read("hybrid_switch/q12/q.capacity",
-                                                  this).c_str());
-            printf("config 12: %d %d\n", len, cap);
-        }
+        // if (!_print && m == 12) {
+        //     int len = atoi(HandlerCall::call_read("hybrid_switch/q12/q.length",
+        //                                           this).c_str());
+        //     int cap = atoi(HandlerCall::call_read("hybrid_switch/q12/q.capacity",
+        //                                           this).c_str());
+        //     printf("config 12: %d %d\n", len, cap);
+        // }
 
         Vector<int> configuration = configurations[m];
         int duration = durations[m]; // microseconds
@@ -280,11 +299,17 @@ RunSchedule::execute_schedule(ErrorHandler *)
             int src = configuration[i];
             _pull_switch[dst]->call_write(String(src));
 
+	    if (src == -1 && num_configurations > 1) {
+		if (!new_s || m+1 < num_configurations) {
+		    Vector<int> next_config = configurations[(m+1) % num_configurations];
+		    int next_src = next_config[i];
+		    _packet_pull_switch[next_src * _num_hosts + dst]->call_write(String(-1));
+		}
+	    }
+
 	    _circuit_label[dst]->call_write(String(src+1));
 	    _packet_label[dst]->call_write(String(src+1));
 
-	    if (src != -1)
-	    	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(-1));
 
             // probably just remove this? we aren't signaling TCP to dump.
             // sprintf(handler, "hybrid_switch/ecnr%d/s.switch %d", dst, src);
@@ -302,14 +327,6 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 - (1000000000 * start_time.tv_sec + start_time.tv_nsec);
         }    
         start_time = ts_new;
-
-	// // re-enable packet switch
-        for(int i = 0; i < _num_hosts; i++) {
-	    int dst = i;
-            int src = configuration[i];
-	    if (src != -1)
-	    	_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
-        }
 
         // make this -DAYS_OUT buffers smaller
 	// only if this (src, dst) pair isn't in the next k configs
@@ -355,6 +372,17 @@ RunSchedule::execute_schedule(ErrorHandler *)
         //         }
         //     }
         // }
+
+	// re-enable packet switch
+        for(int i = 0; i < _num_hosts; i++) {
+	    int dst = i;
+            int src = configuration[i];
+	    if (src != -1 && num_configurations > 1) {
+		_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
+	    }
+        }
+
+
     }    
     free(durations);
     // free(buffer_times);
