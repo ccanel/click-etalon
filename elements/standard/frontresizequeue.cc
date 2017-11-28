@@ -19,14 +19,25 @@
 #include <click/config.h>
 #include "frontresizequeue.hh"
 #include <click/confparse.hh>
+#include <click/etheraddress.hh>
+#include <clicknet/ether.h>
 #include <click/error.hh>
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
 CLICK_DECLS
 
+static const unsigned char default_destination[6] = {
+    0x01, 0x80, 0xC2, 0x00, 0x00, 0x01
+};
+
+static const unsigned char default_source[6] = {
+    0xF4, 0x52, 0x14, 0x15, 0x6D, 0x31
+};
+
 FrontResizeQueue::FrontResizeQueue()
 {
     _mark_fraction = 0.5;
+    _circuit = false;
 }
 
 void *
@@ -254,11 +265,41 @@ FrontResizeQueue::push(int, Packet *p)
     int d = _capacity;
     // if (r < s / d) {
     if (s > _mark_fraction * d) {
-    	if (WritablePacket *q = p->uniqueify()) {
-    	    q->ip_header()->ip_tos |= IP_ECN_CE;
-    	    p = q;
-    	    // printf("set ECN, %f, %f, %d, %f\n", r, s, d, s/d);
-    	}
+    	// if (WritablePacket *q = p->uniqueify()) {
+    	//     q->ip_header()->ip_tos |= IP_ECN_CE;
+    	//     p = q;
+    	//     // printf("set ECN, %f, %f, %d, %f\n", r, s, d, s/d);
+    	// }
+	
+	// build PAUSE frame
+	int packets_over = round(s - _mark_fraction*d);
+	int bw = !_circuit ? 0.5*pow(10,9) : 4*pow(10,9);
+	float ns_per_packet = (1.0 / bw) * 8 * 9000 * pow(10,9);
+	float quanta_in_ns = (1.0 / (40*pow(10,9))) * 512 * pow(10,9);
+	float quanta_per_packet = ns_per_packet / quanta_in_ns;
+	
+	EtherAddress src(default_source), dst(default_destination);
+	uint16_t pausetime = 65535;
+	if (quanta_per_packet * packets_over <= 65535)
+	    pausetime = quanta_per_packet * packets_over;
+	WritablePacket *q;
+	if (!(q = Packet::make(64))) {
+	    // return errh->error("out of memory!"), -ENOMEM;
+	    printf("couldn't create pause frame, oom\n");
+	} else {
+	    // printf("building pause frame, quanta=%d\n", pausetime);
+	    q->set_mac_header(q->data(), sizeof(click_ether));
+	    click_ether *ethh = q->ether_header();
+	    memcpy(ethh->ether_dhost, &dst, 6);
+	    memcpy(ethh->ether_shost, &src, 6);
+	    ethh->ether_type = htons(ETHERTYPE_MACCONTROL);
+
+	    click_ether_macctl *emch = (click_ether_macctl *) q->network_header();
+	    emch->ether_macctl_opcode = htons(ETHER_MACCTL_OP_PAUSE);
+	    emch->ether_macctl_param = htons(pausetime);
+	    memset(emch->ether_macctl_reserved, 0, sizeof(emch->ether_macctl_reserved));
+	    output(1).push(q);
+	}
     }
 
     // five_tuple_list *ftl = NULL;
@@ -280,6 +321,12 @@ FrontResizeQueue::push(int, Packet *p)
     pthread_mutex_unlock(&_lock);
 }
 
+// Packet *
+// FrontResizeQueue::pull(int)
+// {
+//     return deq();
+// }
+
 int
 FrontResizeQueue::change_mark_fraction(const String &str, Element *e, void *, ErrorHandler *)
 {
@@ -300,12 +347,23 @@ FrontResizeQueue::get_mark_fraction(Element *e, void *)
     return String(mf);
 }
 
+int
+FrontResizeQueue::change_circuit(const String &str, Element *e, void *, ErrorHandler *)
+{
+    FrontResizeQueue *frq = static_cast<FrontResizeQueue *>(e);
+    pthread_mutex_lock(&(frq->_lock));
+    frq->_circuit = (str == "1");
+    pthread_mutex_unlock(&(frq->_lock));
+    return 0;
+}
+
 void
 FrontResizeQueue::add_handlers()
 {
     FullNoteQueue::add_handlers();
     add_write_handler("mark_fraction", change_mark_fraction, 0);
     add_read_handler("mark_fraction", get_mark_fraction, 0);
+    add_write_handler("circuit", change_circuit, 0);
 }
 
 CLICK_ENDDECLS

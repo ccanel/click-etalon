@@ -76,10 +76,12 @@ class FrontResizeQueue : public FullNoteQueue { public:
 
   static int change_mark_fraction(const String&, Element*, void*, ErrorHandler*);
   static String get_mark_fraction(Element *e, void *user_data);
+  static int change_circuit(const String&, Element*, void*, ErrorHandler*);
 
   void push(int, Packet*);
 
   float _mark_fraction;
+  bool _circuit;
 };
 
 CLICK_ENDDECLS
