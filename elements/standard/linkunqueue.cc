@@ -171,12 +171,15 @@ LinkUnqueue::run_task(Task *)
 	} else {
 	    // large delay, schedule Timer instead
 	    //_state = S_TIMER;
-	    _timer.schedule_at(expiry);
+	    // _timer.schedule_at(expiry);
+	    _task.fast_reschedule();
 	}
     } else if (_signal) {
 	//_state = S_TASK;
 	_task.fast_reschedule();
     } else {
+	// printf("fell asleep\n");
+	_task.fast_reschedule();
 	//_state = S_ASLEEP;
     }
 
