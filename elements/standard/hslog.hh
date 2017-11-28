@@ -33,6 +33,7 @@ private:
     FILE *_fp;
     HandlerCall **_circuit_source;
     HandlerCall *_q12_len, *_q12_cap;
+    int _num_hosts;
 };
 
 CLICK_ENDDECLS
