@@ -22,6 +22,7 @@ class HSLog : public Element { public:
     const char *port_count() const		{ return PORTS_1_1; }
 
     int initialize(ErrorHandler *errh);
+    int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
     void add_handlers() CLICK_COLD;
     
     Packet *simple_action(Packet *);
@@ -30,7 +31,7 @@ private:
     static int handler(const String&, Element*, void*, ErrorHandler*);
     int open_log(const char *);
     FILE *_fp;
-    // int _circuit_dest[9];
+    HandlerCall **_circuit_source;
     HandlerCall *_q12_len, *_q12_cap;
 };
 

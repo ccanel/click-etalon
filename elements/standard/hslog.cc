@@ -21,14 +21,24 @@
 #include "hslog.hh"
 #include <click/packet_anno.hh>
 #include <click/args.hh>
+#include <clicknet/tcp.h>
 CLICK_DECLS
 
 HSLog::HSLog()
 {
+}
+
+int
+HSLog::configure(Vector<String> &conf, ErrorHandler *errh)
+{
+    if (Args(conf, this, errh)
+	.read_mp("NUM_HOSTS", _num_hosts)
+	.complete() < 0)
+	return -1;
+    if (_num_hosts == 0)
+	return -1;
     _fp = NULL;
-    // for(int i = 0; i < 9; i++) {
-    // 	_circuit_dest[i] = 0;
-    // }
+    return 0;
 }
 
 int
@@ -38,6 +48,14 @@ HSLog::initialize(ErrorHandler* errh)
     _q12_len->initialize(HandlerCall::f_read, this, errh);
     _q12_cap = new HandlerCall("hybrid_switch/q12/q.capacity");
     _q12_cap->initialize(HandlerCall::f_read, this, errh);
+
+    _circuit_source = (HandlerCall **)malloc(sizeof(HandlerCall *) * _num_hosts + 1);
+    for(int dst = 1; dst < _num_hosts + 1; dst++) {
+	char handler[500];
+	sprintf(handler, "hybrid_switch/coc%d.color", dst);
+	_circuit_source[dst] = new HandlerCall(handler);
+	_circuit_source[dst]->initialize(HandlerCall::f_read, this, errh);
+    }
     
     if (open_log("/tmp/hslog.log"))
     	return 1;
@@ -76,29 +94,31 @@ HSLog::simple_action(Packet *p)
     bool is_circuit = p->anno_u8(22) == 1 ? true : false;
     int dst_can_circuit_recv_from = p->anno_u8(23);
 
-    // _circuit_dest[dst_can_circuit_recv_from] = dst;
+    // change ECN on the ACKS
+    int c_src = atoi(_circuit_source[src]->call_read().c_str());
+    bool have_circuit = c_src == dst;
 
-    // // change ECN on the ACKS
-    // // bool have_circuit = dst == _circuit_dest[src];
-    // bool have_circuit = src == _circuit_dest[dst];
-    // if (have_circuit) {
-    // if ((float)len / cap > .5) {
-    // 	if (WritablePacket *q = p->uniqueify()) {
-    // 	    q->ip_header()->ip_tos |= IP_ECN_CE;
-    // 	    p = q;
-    // 	}
-    // }
+    if (have_circuit) {
+	if (WritablePacket *q = p->uniqueify()) {
+	    if (q->ip_header()->ip_p == IP_PROTO_TCP) { // TCP
+		q->tcp_header()->th_flags |= TH_ECE;
+	    }
+	    p = q;
+	}
+    }
 
     if (is_circuit) { // circuit
 	fprintf(_fp, "%s: %d -> %d (%d bytes), circuit, %d %d, %d can recv from %d, " \
-		"latency %fus\n",
+		"latency %fus, have_circuit %d\n",
 		now.unparse().c_str(), src, dst,
-		p->length(), len, cap, dst, dst_can_circuit_recv_from, latency);
+		p->length(), len, cap, dst, dst_can_circuit_recv_from, latency,
+		have_circuit);
     } else { // packet
 	fprintf(_fp, "%s: %d -> %d (%d bytes), packet, %d %d, %d can recv from %d, " \
-		"latency %fus\n",
+		"latency %fus, have_circuit %d\n",
 		now.unparse().c_str(), src, dst,
-		p->length(), len, cap, dst, dst_can_circuit_recv_from, latency);
+		p->length(), len, cap, dst, dst_can_circuit_recv_from, latency,
+		have_circuit);
     }
     return p;
 }
