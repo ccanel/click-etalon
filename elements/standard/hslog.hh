@@ -2,6 +2,7 @@
 #ifndef CLICK_HSLOG_HH
 #define CLICK_HSLOG_HH
 #include <click/element.hh>
+#include <pthread.h>
 CLICK_DECLS
 
 /* =c
@@ -27,12 +28,15 @@ class HSLog : public Element { public:
     
     Packet *simple_action(Packet *);
 
+    pthread_mutex_t lock;
+
 private:
     static int handler(const String&, Element*, void*, ErrorHandler*);
+    static int set_ece(const String&, Element*, void*, ErrorHandler*);
     int open_log(const char *);
     FILE *_fp;
-    HandlerCall **_circuit_source;
     HandlerCall *_q12_len, *_q12_cap;
+    int *ece_map;
     int _num_hosts;
 };
 

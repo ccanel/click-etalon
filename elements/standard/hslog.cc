@@ -22,10 +22,12 @@
 #include <click/packet_anno.hh>
 #include <click/args.hh>
 #include <clicknet/tcp.h>
+#include <pthread.h>
 CLICK_DECLS
 
 HSLog::HSLog()
 {
+    pthread_mutex_init(&lock, NULL);
 }
 
 int
@@ -49,13 +51,7 @@ HSLog::initialize(ErrorHandler* errh)
     _q12_cap = new HandlerCall("hybrid_switch/q12/q.capacity");
     _q12_cap->initialize(HandlerCall::f_read, this, errh);
 
-    _circuit_source = (HandlerCall **)malloc(sizeof(HandlerCall *) * _num_hosts + 1);
-    for(int dst = 1; dst < _num_hosts + 1; dst++) {
-	char handler[500];
-	sprintf(handler, "hybrid_switch/coc%d.color", dst);
-	_circuit_source[dst] = new HandlerCall(handler);
-	_circuit_source[dst]->initialize(HandlerCall::f_read, this, errh);
-    }
+    ece_map = (int *)malloc(sizeof(int) * (_num_hosts + 1) * (_num_hosts + 1));
     
     if (open_log("/tmp/hslog.log"))
     	return 1;
@@ -91,12 +87,12 @@ HSLog::simple_action(Packet *p)
 
     int src = p->anno_u8(20);
     int dst = p->anno_u8(21);
-    bool is_circuit = p->anno_u8(22) == 1 ? true : false;
+    bool is_circuit = p->anno_u8(22) == 1;
     int dst_can_circuit_recv_from = p->anno_u8(23);
 
+    pthread_mutex_lock(&lock);
     // change ECN on the ACKS
-    int c_src = atoi(_circuit_source[src]->call_read().c_str());
-    bool have_circuit = c_src == dst;
+    bool have_circuit = ece_map[dst * (_num_hosts + 1) + src];
 
     if (have_circuit) {
 	if (WritablePacket *q = p->uniqueify()) {
@@ -106,6 +102,7 @@ HSLog::simple_action(Packet *p)
 	    p = q;
 	}
     }
+    pthread_mutex_unlock(&lock);
 
     if (is_circuit) { // circuit
 	fprintf(_fp, "%s: %d -> %d (%d bytes), circuit, %d %d, %d can recv from %d, " \
@@ -131,10 +128,32 @@ HSLog::handler(const String &str, Element *e, void *, ErrorHandler *)
     return 0;
 }
 
+int
+HSLog::set_ece(const String &str, Element *e, void *, ErrorHandler *)
+{
+    HSLog *hsl = static_cast<HSLog *>(e);
+    int hosts = hsl->_num_hosts + 1;
+    pthread_mutex_lock(&(hsl->lock));
+    for(int i = 1; i < hosts; i++) {
+	for(int j = 1; j < hosts; j++) {
+	    hsl->ece_map[i * hosts + j] = 0;
+	}
+    }
+    const char *s = str.c_str();
+    for(unsigned int i = 0; i < strlen(s); i += 3) {
+	int src = s[i] - '0'; // convert char digit to int;
+	int dst = s[i+1] - '0';
+	hsl->ece_map[src * hosts + dst] = 1;
+    }
+    pthread_mutex_unlock(&(hsl->lock));
+    return 0;
+}
+
 void
 HSLog::add_handlers()
 {
     add_write_handler("openLog", handler, 0);
+    add_write_handler("setECE", set_ece, 0);
 }
 
 CLICK_ENDDECLS

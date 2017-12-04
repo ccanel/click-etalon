@@ -112,6 +112,9 @@ RunSchedule::initialize(ErrorHandler *errh)
 	_packet_label[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
+    _ece_map = new HandlerCall("hsl.setECE");
+    _ece_map->initialize(HandlerCall::f_write, this, errh);
+
     return 0;
 }
 
@@ -140,8 +143,10 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     if (rs->do_resize && rs->do_resize != current) {
         // get sizes based on queues sizes
         // rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-        rs->_big_buffer_size = atof(rs->_queue_capacity[0]->call_read().c_str());
-        rs->_small_buffer_size = rs->_big_buffer_size / 4;
+        // rs->_big_buffer_size = atof(rs->_queue_capacity[0]->call_read().c_str());
+        // rs->_small_buffer_size = rs->_big_buffer_size / 4;
+        rs->_small_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
+        rs->_big_buffer_size = rs->_small_buffer_size * 8;
         if (rs->_small_buffer_size < 1) {
             rs->_small_buffer_size = 1;
         }
@@ -226,7 +231,6 @@ RunSchedule::execute_schedule(ErrorHandler *)
 	}
     }
 
-
     // at the beginning of the 'week' set all the buffers to full size
     // int *buffer_times = (int *)malloc(sizeof(int) * _num_hosts * _num_hosts);
     // if (resize) {
@@ -245,7 +249,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     // }
 
     // make first days buffers big
-    int DAYS_OUT = 2;
+    int DAYS_OUT = 6;
     // if(resize) {
     // 	for(int k = 0; k < DAYS_OUT; k++) {
     // 	    for(int i = 0; i < _num_hosts; i++) {
@@ -292,6 +296,25 @@ RunSchedule::execute_schedule(ErrorHandler *)
         int duration = durations[m]; // microseconds
         struct timespec start_time;
         clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+	// set ECE
+	char ecem[500];
+	for(int i = 0; i < 500; i++)
+	    ecem[i] = 0;
+	int q = 0;
+	for(int k = 0; k < 2; k++) {
+	    for(int i = 0; i < _num_hosts; i++) {
+		int dst = i;
+		int src = configurations[(m+k) % num_configurations][i];
+		if (src != -1) {
+		    ecem[q] = src + 1 + '0';
+		    ecem[q+1] = dst + 1 + '0';
+		    ecem[q+2] = ' ';
+		    q += 3;
+		}
+	    }
+	}
+	_ece_map->call_write(ecem);
 
         // set configuration
         for(int i = 0; i < _num_hosts; i++) {
@@ -381,8 +404,6 @@ RunSchedule::execute_schedule(ErrorHandler *)
 		_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
 	    }
         }
-
-
     }    
     free(durations);
     // free(buffer_times);
