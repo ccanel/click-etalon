@@ -28,7 +28,7 @@ CLICK_DECLS
 
 RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
                              _big_buffer_size(100), _small_buffer_size(10),
-                             _print(0)
+                             _print(0), _days_out(6)
 {
     pthread_mutex_init(&lock, NULL);
 }
@@ -159,6 +159,17 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     return 0;
 }
 
+int
+RunSchedule::daysout_handler(const String &str, Element *e, void *, ErrorHandler *)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+
+    pthread_mutex_lock(&(rs->lock));
+    rs->_days_out = atoi(str.c_str());
+    pthread_mutex_unlock(&(rs->lock));
+    return 0;
+}
+
 Vector<String>
 RunSchedule::split(const String &s, char delim) {
     Vector<String> elems;
@@ -186,6 +197,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     bool resize = do_resize;
     int small_size = _small_buffer_size;
     int big_size = _big_buffer_size;
+    int days_out = _days_out;
     bool new_s = new_sched;
     new_sched = false;
     pthread_mutex_unlock(&lock);
@@ -249,7 +261,6 @@ RunSchedule::execute_schedule(ErrorHandler *)
     // }
 
     // make first days buffers big
-    int DAYS_OUT = 6;
     // if(resize) {
     // 	for(int k = 0; k < DAYS_OUT; k++) {
     // 	    for(int i = 0; i < _num_hosts; i++) {
@@ -267,7 +278,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
         // make next days buffer big
         if(resize) {
             // for(int k = -1 * DAYS_OUT; k <= DAYS_OUT; k++) {
-            for(int k = 0; k <= DAYS_OUT; k++) {
+            for(int k = 0; k <= days_out; k++) {
                 for(int i = 0; i < _num_hosts; i++) {
                     int dst = i;
 		    int index = (m + k) % num_configurations;
@@ -302,7 +313,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
 	for(int i = 0; i < 500; i++)
 	    ecem[i] = 0;
 	int q = 0;
-	for(int k = 0; k < 2; k++) {
+	for(int k = 0; k <= days_out; k++) {
 	    for(int i = 0; i < _num_hosts; i++) {
 		int dst = i;
 		int src = configurations[(m+k) % num_configurations][i];
@@ -362,7 +373,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 int src = configurations[index][i];
 		bool not_found = true;
 		// for (k = -1 * DAYS_OUT + 1; k <= DAYS_OUT; k++) {
-		for (k = 1; k <= DAYS_OUT; k++) {
+		for (k = 1; k <= days_out; k++) {
 		    index = (m + k) % num_configurations;
 		    index = index < 0 ? index + num_configurations : index;
 		    int src2 = configurations[index][i];
@@ -441,6 +452,7 @@ RunSchedule::add_handlers()
 {
     add_write_handler("setSchedule", handler, 0);
     add_write_handler("setDoResize", resize_handler, 0);
+    add_write_handler("setDaysOut", daysout_handler, 0);
 }
 
 CLICK_ENDDECLS

@@ -45,6 +45,7 @@ class RunSchedule : public Element {
 
     static int handler(const String&, Element*, void*, ErrorHandler*);
     static int resize_handler(const String&, Element*, void*, ErrorHandler*);
+    static int daysout_handler(const String&, Element*, void*, ErrorHandler*);
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
@@ -60,6 +61,7 @@ class RunSchedule : public Element {
     HandlerCall *_ece_map;
     int *_queue_sizes;
     int _print;
+    int _days_out;
 };
 
 CLICK_ENDDECLS
