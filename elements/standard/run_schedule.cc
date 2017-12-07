@@ -27,10 +27,11 @@
 CLICK_DECLS
 
 RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
-                             _big_buffer_size(100), _small_buffer_size(10),
+                             _big_buffer_size(128), _small_buffer_size(16),
                              _print(0), _days_out(6)
 {
     pthread_mutex_init(&lock, NULL);
+    clock_gettime(CLOCK_MONOTONIC, &_start_time);
 }
 
 int
@@ -61,19 +62,11 @@ RunSchedule::initialize(ErrorHandler *errh)
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
             sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
-            // sprintf(handler, "hybrid_switch/q%d%d/q.mark_fraction", src+1, dst+1);
             _queue_capacity[src * _num_hosts + dst] = new HandlerCall(handler);
             _queue_capacity[src * _num_hosts + dst]->
                 initialize(HandlerCall::f_read | HandlerCall::f_write,
                            this, errh);
         }
-    }
-
-    _queue_sizes = (int *)malloc(sizeof(int) * _num_hosts * _num_hosts);
-    for(int src = 0; src < _num_hosts; src++) {
-	for(int dst = 0; dst < _num_hosts; dst++) {
-	    _queue_sizes[src * _num_hosts + dst] = -1;
-	}
     }
 
     _pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
@@ -138,22 +131,14 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     RunSchedule *rs = static_cast<RunSchedule *>(e);
 
     pthread_mutex_lock(&(rs->lock));
-    bool current = rs->do_resize;
     BoolArg::parse(str, rs->do_resize, ArgContext());
-    if (rs->do_resize && rs->do_resize != current) {
-        // get sizes based on queues sizes
-        // rs->_big_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-        // rs->_big_buffer_size = atof(rs->_queue_capacity[0]->call_read().c_str());
-        // rs->_small_buffer_size = rs->_big_buffer_size / 4;
-        rs->_small_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-        rs->_big_buffer_size = rs->_small_buffer_size * 8;
-        if (rs->_small_buffer_size < 1) {
-            rs->_small_buffer_size = 1;
-        }
+    if (rs->do_resize) {
+	// get sizes based on queues sizes
+	rs->_small_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
+	rs->_big_buffer_size = rs->_small_buffer_size * 8;
+
         printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
                rs->_big_buffer_size);
-        // printf("auto resizing: %f -> %f\n", rs->_small_buffer_size,
-        //        rs->_big_buffer_size);
     }
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -228,95 +213,66 @@ RunSchedule::execute_schedule(ErrorHandler *)
         j++;
     }
 
-    // re-enable packet switch
-    if (new_s && num_configurations == 1) {
-	for(int i = 0; i < _num_hosts; i++) {
-	    for(int j = 0; j < _num_hosts; j++) {
-		int dst = i;
-		int src = j;
-		if (configurations[0][i] == -1) {
-		    _packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
-		} else {
-		    _packet_pull_switch[src * _num_hosts + dst]->call_write(String(-1));
-		}
+    // cleanup from previous run during a new schedule roll over
+    if (new_s && resize) {
+        bool *qbig = (bool *)malloc(sizeof(bool) * _num_hosts * _num_hosts);
+	bzero(qbig, sizeof(bool) * _num_hosts * _num_hosts);
+	for(int k = 0; k <= days_out; k++) {
+	    for(int dst = 0; dst < _num_hosts; dst++) {
+		int src = configurations[k % num_configurations][dst];
+		if (src == -1)
+		    continue;
+		_queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
+		qbig[src * _num_hosts + dst] = true;
+	    }
+	}
+	for(int dst = 0; dst < _num_hosts; dst++) {
+	    for(int src = 0; src < _num_hosts; src++) {
+		if(!qbig[src * _num_hosts + dst])
+		    _queue_capacity[src * _num_hosts + dst]->
+			call_write(String(small_size));
+	    }
+	}
+	free(qbig);
+    }
+
+    // turn on / off packet switch for special case schedules
+    // (e.g., circuit only, packet only)
+    // and during a schedule roll over
+    if (new_s || num_configurations == 1) {
+	for(int dst = 0; dst < _num_hosts; dst++) {
+	    for(int src = 0; src < _num_hosts; src++) {
+		// packet off only if this (src, dst) pair has circuit
+		int val = configurations[0][dst] == src ? -1 : 0;
+		_packet_pull_switch[src * _num_hosts + dst]->call_write(String(val));
 	    }
 	}
     }
 
-    // at the beginning of the 'week' set all the buffers to full size
-    // int *buffer_times = (int *)malloc(sizeof(int) * _num_hosts * _num_hosts);
-    // if (resize) {
-    // 	memset(buffer_times, 0, sizeof(int) * _num_hosts * _num_hosts);
-    // 	for(int m = 0; m < num_configurations; m++) {
-    // 	    Vector<int> configuration = configurations[m];
-    // 	    for(int i = 0; i < _num_hosts; i++) {
-    // 		int dst = i;
-    // 		int src = configuration[i];
-    // 		if (src == -1)
-    // 		    continue;
-    // 		_queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
-    // 		buffer_times[src * _num_hosts + dst]++;
-    // 	    }
-    // 	}
-    // }
 
-    // make first days buffers big
-    // if(resize) {
-    // 	for(int k = 0; k < DAYS_OUT; k++) {
-    // 	    for(int i = 0; i < _num_hosts; i++) {
-    // 		int dst = i;
-    // 		int src = configurations[k % num_configurations][i];
-    // 		if (src == -1)
-    // 		    continue;
-    // 		_queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
-    // 	    }
-    // 	}
-    // }
 
     // for each configuration in schedule
     for(int m = 0; m < num_configurations; m++) {
-        // make next days buffer big
+        // make next few days buffer big
         if(resize) {
-            // for(int k = -1 * DAYS_OUT; k <= DAYS_OUT; k++) {
             for(int k = 0; k <= days_out; k++) {
-                for(int i = 0; i < _num_hosts; i++) {
-                    int dst = i;
-		    int index = (m + k) % num_configurations;
-		    index = index < 0 ? index + num_configurations : index;
-                    int src = configurations[index][i];
+                for(int dst = 0; dst < _num_hosts; dst++) {
+                    int src = configurations[(m + k) % num_configurations][dst];
                     if (src == -1)
                         continue;
-		    if (_queue_sizes[src * _num_hosts + dst] != big_size) {
-			_queue_capacity[src * _num_hosts + dst]->
-			    call_write(String(big_size));
-		    }
-		    _queue_sizes[src * _num_hosts + dst] = big_size;
+		    _queue_capacity[src * _num_hosts + dst]->
+			call_write(String(big_size));
                 }
             }
         }
 
-        // if (!_print && m == 12) {
-        //     int len = atoi(HandlerCall::call_read("hybrid_switch/q12/q.length",
-        //                                           this).c_str());
-        //     int cap = atoi(HandlerCall::call_read("hybrid_switch/q12/q.capacity",
-        //                                           this).c_str());
-        //     printf("config 12: %d %d\n", len, cap);
-        // }
-
-        Vector<int> configuration = configurations[m];
-        int duration = durations[m]; // microseconds
-        struct timespec start_time;
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
-
 	// set ECE
 	char ecem[500];
-	for(int i = 0; i < 500; i++)
-	    ecem[i] = 0;
+	bzero(ecem, 500);
 	int q = 0;
 	for(int k = 0; k <= days_out; k++) {
-	    for(int i = 0; i < _num_hosts; i++) {
-		int dst = i;
-		int src = configurations[(m+k) % num_configurations][i];
+	    for(int dst = 0; dst < _num_hosts; dst++) {
+		int src = configurations[(m+k) % num_configurations][dst];
 		if (src != -1) {
 		    ecem[q] = src + 1 + '0';
 		    ecem[q+1] = dst + 1 + '0';
@@ -325,114 +281,62 @@ RunSchedule::execute_schedule(ErrorHandler *)
 		}
 	    }
 	}
-	_ece_map->call_write(ecem);
+	_ece_map->call_write(String(ecem));
 
         // set configuration
-        for(int i = 0; i < _num_hosts; i++) {
-            int dst = i;
-            int src = configuration[i];
+        for(int dst = 0; dst < _num_hosts; dst++) {
+            int src = configurations[m][dst];
             _pull_switch[dst]->call_write(String(src));
 
-	    if (src == -1 && num_configurations > 1) {
-		if (!new_s || m+1 < num_configurations) {
-		    Vector<int> next_config = configurations[(m+1) % num_configurations];
-		    int next_src = next_config[i];
-		    _packet_pull_switch[next_src * _num_hosts + dst]->call_write(String(-1));
-		}
+	    if (src == -1) {
+		int next_src = configurations[(m+1) % num_configurations][dst];
+		_packet_pull_switch[next_src * _num_hosts + dst]->
+		    call_write(String(-1));
 	    }
 
 	    _circuit_label[dst]->call_write(String(src+1));
 	    _packet_label[dst]->call_write(String(src+1));
-
-
-            // probably just remove this? we aren't signaling TCP to dump.
-            // sprintf(handler, "hybrid_switch/ecnr%d/s.switch %d", dst, src);
-            // HandlerCall::call_write(handler, this);
         }
 
         // wait duration
         long long elapsed_nano = 0;
-
         struct timespec ts_new;
-
-        while (elapsed_nano < duration * 1000) {
+        while (elapsed_nano < durations[m] * 1e3) { // duration in microseconds
             clock_gettime(CLOCK_MONOTONIC, &ts_new);
-            elapsed_nano = (1000000000 * ts_new.tv_sec + ts_new.tv_nsec)
-                - (1000000000 * start_time.tv_sec + start_time.tv_nsec);
+            elapsed_nano = (1e9 * ts_new.tv_sec + ts_new.tv_nsec)
+                - (1e9 * _start_time.tv_sec + _start_time.tv_nsec);
         }    
-        start_time = ts_new;
+        _start_time = ts_new;
 
-        // make this -DAYS_OUT buffers smaller
+        // make this days buffers smaller
 	// only if this (src, dst) pair isn't in the next k configs
         if(resize) {
-            for(int i = 0; i < _num_hosts; i++) {
-                int dst = i;
-		int k = 0; //-1 * DAYS_OUT;
-		int index = (m + k) % num_configurations;
-		index = index < 0 ? index + num_configurations : index;
-                int src = configurations[index][i];
+            for(int dst = 0; dst < _num_hosts; dst++) {
+                int src = configurations[m][dst];
+                if (src == -1)
+                    continue;
 		bool not_found = true;
-		// for (k = -1 * DAYS_OUT + 1; k <= DAYS_OUT; k++) {
-		for (k = 1; k <= days_out; k++) {
-		    index = (m + k) % num_configurations;
-		    index = index < 0 ? index + num_configurations : index;
-		    int src2 = configurations[index][i];
+		for (int k = 1; k <= days_out; k++) {
+		    int src2 = configurations[(m + k) % num_configurations][dst];
 		    if (src == src2)
 			not_found = false;
 		}
-                if (src == -1)
-                    continue;
 		if (not_found) {
-		    if (_queue_sizes[src * _num_hosts + dst] != small_size) {
-			_queue_capacity[src * _num_hosts + dst]->
-			    call_write(String(small_size));
-		    }
-		    _queue_sizes[src * _num_hosts + dst] = small_size;
+		    _queue_capacity[src * _num_hosts + dst]->
+			call_write(String(small_size));
 		}
             }
         }
 
-        // resize buffer if needed
-        // if(resize) {
-        //     for(int i = 0; i < _num_hosts; i++) {
-        //         int dst = i;
-        //         int src = configuration[i];
-        //         if (src == -1)
-        //             continue;
-        //         buffer_times[src * _num_hosts + dst]--;
-        //         if (buffer_times[src * _num_hosts + dst] == 0) {
-        //             _queue_capacity[src * _num_hosts + dst]->
-        //                 call_write(String(small_size));
-        //         }
-        //     }
-        // }
-
 	// re-enable packet switch
-        for(int i = 0; i < _num_hosts; i++) {
-	    int dst = i;
-            int src = configuration[i];
-	    if (src != -1 && num_configurations > 1) {
+        for(int dst = 0; dst < _num_hosts; dst++) {
+            int src = configurations[m][dst];
+	    if (src != -1) {
 		_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
 	    }
         }
     }    
     free(durations);
-    // free(buffer_times);
-
-    if(!do_resize && resize) {
-        // reset all queues back to large size
-        for(int i = 0; i < _num_hosts; i++) {
-            for (int j = 0; j < _num_hosts; j++) {
-		if (_queue_sizes[i * _num_hosts + j] != big_size) {
-		    _queue_capacity[i * _num_hosts + j]->
-			call_write(String(big_size));
-		}
-		_queue_sizes[i * _num_hosts + j] = big_size;
-            }
-        }
-    }
-
-
     return 0;
 }
 
@@ -441,8 +345,6 @@ RunSchedule::run_task(Task *)
 {
     while(1) {
         execute_schedule(ErrorHandler::default_handler());
-        // if (rc)
-        //     return;
     }
     return true;
 }

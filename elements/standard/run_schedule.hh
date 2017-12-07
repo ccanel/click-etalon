@@ -59,9 +59,9 @@ class RunSchedule : public Element {
     HandlerCall **_circuit_label;
     HandlerCall **_packet_label;
     HandlerCall *_ece_map;
-    int *_queue_sizes;
     int _print;
     int _days_out;
+    struct timespec _start_time;
 };
 
 CLICK_ENDDECLS
