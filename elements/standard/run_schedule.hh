@@ -45,7 +45,7 @@ class RunSchedule : public Element {
 
     static int handler(const String&, Element*, void*, ErrorHandler*);
     static int resize_handler(const String&, Element*, void*, ErrorHandler*);
-    static int daysout_handler(const String&, Element*, void*, ErrorHandler*);
+    static int in_advance_handler(const String&, Element*, void*, ErrorHandler*);
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
@@ -59,9 +59,11 @@ class RunSchedule : public Element {
     HandlerCall **_circuit_label;
     HandlerCall **_packet_label;
     HandlerCall *_ece_map;
+    HandlerCall *_log_config;
     int _print;
-    int _days_out;
+    int _in_advance;
     struct timespec _start_time;
+    long long _next_time;
 };
 
 CLICK_ENDDECLS

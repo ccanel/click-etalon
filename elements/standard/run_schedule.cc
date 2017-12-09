@@ -28,7 +28,7 @@ CLICK_DECLS
 
 RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
                              _big_buffer_size(128), _small_buffer_size(16),
-                             _print(0), _days_out(6)
+                             _print(0), _in_advance(12000), _next_time(0)
 {
     pthread_mutex_init(&lock, NULL);
     clock_gettime(CLOCK_MONOTONIC, &_start_time);
@@ -108,6 +108,9 @@ RunSchedule::initialize(ErrorHandler *errh)
     _ece_map = new HandlerCall("hsl.setECE");
     _ece_map->initialize(HandlerCall::f_write, this, errh);
 
+    _log_config = new HandlerCall("hsl.circuitEvent");
+    _log_config->initialize(HandlerCall::f_write, this, errh);
+
     return 0;
 }
 
@@ -145,12 +148,12 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
 }
 
 int
-RunSchedule::daysout_handler(const String &str, Element *e, void *, ErrorHandler *)
+RunSchedule::in_advance_handler(const String &str, Element *e, void *, ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
 
     pthread_mutex_lock(&(rs->lock));
-    rs->_days_out = atoi(str.c_str());
+    rs->_in_advance = atoi(str.c_str());
     pthread_mutex_unlock(&(rs->lock));
     return 0;
 }
@@ -182,7 +185,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     bool resize = do_resize;
     int small_size = _small_buffer_size;
     int big_size = _big_buffer_size;
-    int days_out = _days_out;
+    int in_advance = _in_advance;
     bool new_s = new_sched;
     new_sched = false;
     pthread_mutex_unlock(&lock);
@@ -217,7 +220,9 @@ RunSchedule::execute_schedule(ErrorHandler *)
     if (new_s && resize) {
         bool *qbig = (bool *)malloc(sizeof(bool) * _num_hosts * _num_hosts);
 	bzero(qbig, sizeof(bool) * _num_hosts * _num_hosts);
-	for(int k = 0; k <= days_out; k++) {
+
+	int remaining = in_advance;
+	for(int k = 0; remaining >= 0; k++) {
 	    for(int dst = 0; dst < _num_hosts; dst++) {
 		int src = configurations[k % num_configurations][dst];
 		if (src == -1)
@@ -225,6 +230,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
 		_queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
 		qbig[src * _num_hosts + dst] = true;
 	    }
+	    remaining -= durations[k % num_configurations];
 	}
 	for(int dst = 0; dst < _num_hosts; dst++) {
 	    for(int src = 0; src < _num_hosts; src++) {
@@ -253,36 +259,6 @@ RunSchedule::execute_schedule(ErrorHandler *)
 
     // for each configuration in schedule
     for(int m = 0; m < num_configurations; m++) {
-        // make next few days buffer big
-        if(resize) {
-            for(int k = 0; k <= days_out; k++) {
-                for(int dst = 0; dst < _num_hosts; dst++) {
-                    int src = configurations[(m + k) % num_configurations][dst];
-                    if (src == -1)
-                        continue;
-		    _queue_capacity[src * _num_hosts + dst]->
-			call_write(String(big_size));
-                }
-            }
-        }
-
-	// set ECE
-	char ecem[500];
-	bzero(ecem, 500);
-	int q = 0;
-	for(int k = 0; k <= days_out; k++) {
-	    for(int dst = 0; dst < _num_hosts; dst++) {
-		int src = configurations[(m+k) % num_configurations][dst];
-		if (src != -1) {
-		    ecem[q] = src + 1 + '0';
-		    ecem[q+1] = dst + 1 + '0';
-		    ecem[q+2] = ' ';
-		    q += 3;
-		}
-	    }
-	}
-	_ece_map->call_write(String(ecem));
-
         // set configuration
         for(int dst = 0; dst < _num_hosts; dst++) {
             int src = configurations[m][dst];
@@ -298,11 +274,48 @@ RunSchedule::execute_schedule(ErrorHandler *)
 	    _packet_label[dst]->call_write(String(src+1));
         }
 
+	char conf[500];
+	bzero(conf, 500);
+	for (int i = 0; i < configurations[m].size(); i++) {
+	    sprintf(&(conf[strlen(conf)]), "%d/", configurations[m][i]);
+	}
+	conf[strlen(conf)-1] = 0;
+	_log_config->call_write(String(conf));
+
         // wait duration
         long long elapsed_nano = 0;
         struct timespec ts_new;
         while (elapsed_nano < durations[m] * 1e3) { // duration in microseconds
-            clock_gettime(CLOCK_MONOTONIC, &ts_new);
+	    clock_gettime(CLOCK_MONOTONIC, &ts_new);
+	    long long current_nano = 1e9 * ts_new.tv_sec + ts_new.tv_nsec;
+
+	    if (current_nano > _next_time) {
+		// set ECE
+		char ecem[500];
+		bzero(ecem, 500);
+		int q = 0;
+		int remaining = in_advance + elapsed_nano / 1e3;
+		for(int k = 0; remaining >= 0; k++) {
+		    for(int dst = 0; dst < _num_hosts; dst++) {
+			int src = configurations[(m+k) % num_configurations][dst];
+			if (src == -1)
+			    continue;
+			ecem[q] = src + 1 + '0';
+			ecem[q+1] = dst + 1 + '0';
+			ecem[q+2] = ' ';
+			q += 3;
+
+			if(resize) { // make the next few days buffer big
+			    _queue_capacity[src * _num_hosts + dst]->
+				call_write(String(big_size));
+			}
+		    }
+		    remaining -= durations[(m+k) % num_configurations];
+		}
+		_ece_map->call_write(String(ecem));
+		_next_time = current_nano - remaining * 1e3;
+	    }
+
             elapsed_nano = (1e9 * ts_new.tv_sec + ts_new.tv_nsec)
                 - (1e9 * _start_time.tv_sec + _start_time.tv_nsec);
         }    
@@ -316,10 +329,12 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 if (src == -1)
                     continue;
 		bool not_found = true;
-		for (int k = 1; k <= days_out; k++) {
+		int remaining = in_advance;
+		for (int k = 1; remaining >= 0; k++) {
 		    int src2 = configurations[(m + k) % num_configurations][dst];
 		    if (src == src2)
 			not_found = false;
+		    remaining -= durations[(m+k) % num_configurations];
 		}
 		if (not_found) {
 		    _queue_capacity[src * _num_hosts + dst]->
@@ -354,7 +369,7 @@ RunSchedule::add_handlers()
 {
     add_write_handler("setSchedule", handler, 0);
     add_write_handler("setDoResize", resize_handler, 0);
-    add_write_handler("setDaysOut", daysout_handler, 0);
+    add_write_handler("setInAdvance", in_advance_handler, 0);
 }
 
 CLICK_ENDDECLS

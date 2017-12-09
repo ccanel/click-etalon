@@ -33,10 +33,13 @@ class HSLog : public Element { public:
 private:
     static int handler(const String&, Element*, void*, ErrorHandler*);
     static int set_ece(const String&, Element*, void*, ErrorHandler*);
+    static int set_circuit_event(const String&, Element*, void*, ErrorHandler*);
+    static Vector<String> split(const String&, char);
     int open_log(const char *);
     FILE *_fp;
     HandlerCall *_q12_len, *_q12_cap;
     int *ece_map;
+    int *current_circuits;
     int _num_hosts;
 };
 
