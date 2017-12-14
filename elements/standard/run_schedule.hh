@@ -37,13 +37,12 @@ class RunSchedule : public Element {
     bool run_task(Task *);
 
     String next_schedule;
-    bool new_sched;
     bool do_resize;
     pthread_mutex_t lock;
 
   private:
 
-    static int handler(const String&, Element*, void*, ErrorHandler*);
+    static int set_schedule_handler(const String&, Element*, void*, ErrorHandler*);
     static int resize_handler(const String&, Element*, void*, ErrorHandler*);
     static int in_advance_handler(const String&, Element*, void*, ErrorHandler*);
     static Vector<String> split(const String&, char);

@@ -31,14 +31,12 @@ class HSLog : public Element { public:
     pthread_mutex_t lock;
 
 private:
-    static int handler(const String&, Element*, void*, ErrorHandler*);
-    static int set_ece(const String&, Element*, void*, ErrorHandler*);
+    static int set_log(const String&, Element*, void*, ErrorHandler*);
     static int set_circuit_event(const String&, Element*, void*, ErrorHandler*);
     static Vector<String> split(const String&, char);
     int open_log(const char *);
     FILE *_fp;
-    HandlerCall *_q12_len, *_q12_cap;
-    int *ece_map;
+    HandlerCall *_q13_len, *_q13_cap;
     int *current_circuits;
     int _num_hosts;
 };

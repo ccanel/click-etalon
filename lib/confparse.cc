@@ -52,9 +52,6 @@
 # define CP_PASS_CONTEXT
 #endif
 #if CLICK_USERLEVEL || CLICK_TOOL
-# include <unordered_map>
-std::unordered_map<String, Element*> element_map;
-std::unordered_map<String, String> hname_map;
 # include <pwd.h>
 #endif
 #if CLICK_BSDMODULE
@@ -2053,13 +2050,6 @@ cp_handler_name(const String& str,
 {
     LocalErrorHandler lerrh(errh);
 
-    // shortcut this if we've done it before
-    if (element_map.find(str) != element_map.end()) {
-        *result_element = element_map[str];
-        *result_hname = hname_map[str];
-        return true;
-    }
-
     String text;
     if (!cp_string(str, &text) || !text) {
     syntax_error:
@@ -2092,10 +2082,6 @@ cp_handler_name(const String& str,
 	    return false;
 	}
     }
-
-    // store for later usage
-    element_map[str] = e;
-    hname_map[str] = text.substring(hstart, text.end());
 
     *result_element = e;
     *result_hname = text.substring(hstart, text.end());

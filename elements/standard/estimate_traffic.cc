@@ -230,12 +230,13 @@ EstimateTraffic::run_task(Task *)
                                                    &sinSize)) == -1) {
                             free(clientAddr);
                             perror("Could not accept() connection");
-                            exit (EXIT_FAILURE);
+                            exit(EXIT_FAILURE);
                         }
                         FD_SET(clientSocket, &_active_fd_set);
                         fprintf(stderr, "New connection: %d\n", clientSocket);
                     }
                     else {
+                        // assumes that we read all info
                         nbytes = read(i, &info, sizeof(info));
                         if (nbytes == 0) {
                             fprintf(stderr, "Closing socket\n");
@@ -246,40 +247,48 @@ EstimateTraffic::run_task(Task *)
                         if (nbytes < 0) {
                             perror("Socket read() failed");
                             close(i);
-                            FD_CLR (i, &_active_fd_set);
-                            exit (EXIT_FAILURE);
+                            FD_CLR(i, &_active_fd_set);
+                            exit(EXIT_FAILURE);
                         }
                         // fprintf(stderr, "[CTRL] SRC: %s DST: %s SIZE: %ld\n",
                         //         info.src, info.dst, info.size);
+                        if (nbytes != sizeof(info)) {
+                            fprintf(stderr, "did not read enough bytes from ADU socket... exiting\n");
+                            exit(EXIT_FAILURE);
+                        }
 
                         int dot_count = 0;
                         int pos;
                         for(pos = 0; pos < INET_ADDRSTRLEN; pos++) {
                             if (info.src[pos] == '.') {
                                 dot_count++;
-                                if (dot_count == 3) {
+                                if (dot_count == 2) {
                                     pos++;
                                     break;
                                 }
                             }
                         }
                         int src = atoi(&info.src[pos]) - 1;
-                        if (strlen(&info.src[pos]) == 1) // physical hosts
-                            src--;
+                        if (src > _num_hosts) {
+                            fprintf(stderr, "bad src addr... exiting\n");
+                            exit(EXIT_FAILURE);
+                        }
 
                         dot_count = 0;
                         for(pos = 0; pos < INET_ADDRSTRLEN; pos++) {
                             if (info.dst[pos] == '.') {
                                 dot_count++;
-                                if (dot_count == 3) {
+                                if (dot_count == 2) {
                                     pos++;
                                     break;
                                 }
                             }
                         }
                         int dst = atoi(&info.dst[pos]) -1;
-                        if (strlen(&info.dst[pos]) == 1) // physical hosts
-                            dst--;
+                        if (dst > _num_hosts) {
+                            fprintf(stderr, "bad dst addr... exiting\n");
+                            exit(EXIT_FAILURE);
+                        }
 
                         _adu_enqueue_matrix[src * _num_hosts + dst] += info.size;
                     }

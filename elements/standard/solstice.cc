@@ -53,7 +53,6 @@ Solstice::configure(Vector<String> &conf, ErrorHandler *errh)
     sols_init(&_s, _num_hosts);
     _s.night_len = reconfig_delay * tdf;  // reconfiguration us
     _s.week_len = 2000 * tdf;  // schedule max length us
-    // _s.min_day_len = 10 * reconfig_delay * tdf;  // minimum configuration length us
     _s.min_day_len = 2 * reconfig_delay * tdf;  // minimum configuration length us
     _s.skip_trim = true;
     _s.day_len_align = 1;  // ???
@@ -203,7 +202,6 @@ Solstice::run_task(Task *)
             schedule[strlen(schedule)-1] = '\0';
         }
 
-        // _print = (_print+1) % 50000;
         _print = (_print+1) % 5000;
         _print2 = (_print2+1) % 50000;
 

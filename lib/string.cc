@@ -26,12 +26,6 @@
 #include <click/vector.hh>
 CLICK_DECLS
 
-namespace std {
-    size_t hash<String>::operator()(const String &s) const {
-        return s.hashcode();
-    }
-}
-
 /** @file string.hh
  * @brief Click's String class.
  */

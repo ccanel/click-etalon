@@ -26,7 +26,7 @@
 
 CLICK_DECLS
 
-RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
+RunSchedule::RunSchedule() : _task(this), _num_hosts(0),
                              _big_buffer_size(128), _small_buffer_size(16),
                              _print(0), _in_advance(12000), _next_time(0)
 {
@@ -57,7 +57,8 @@ RunSchedule::initialize(ErrorHandler *errh)
     sched_setscheduler(getpid(), SCHED_RR, NULL);
 #endif
 
-    _queue_capacity = (HandlerCall **)malloc(sizeof(HandlerCall *) * _num_hosts * _num_hosts);
+    _queue_capacity = (HandlerCall **)malloc(sizeof(HandlerCall *) *
+                                             _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
@@ -78,7 +79,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     }
 
     _packet_pull_switch = (HandlerCall **)malloc(sizeof(HandlerCall *) * \
-    						 _num_hosts * _num_hosts);
+                                                 _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
@@ -91,21 +92,21 @@ RunSchedule::initialize(ErrorHandler *errh)
 
     _circuit_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
-	char handler[500];
-	sprintf(handler, "hybrid_switch/coc%d.color", dst+1);
-	_circuit_label[dst] = new HandlerCall(handler);
-	_circuit_label[dst]->initialize(HandlerCall::f_write, this, errh);
+        char handler[500];
+        sprintf(handler, "hybrid_switch/coc%d.color", dst+1);
+        _circuit_label[dst] = new HandlerCall(handler);
+        _circuit_label[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
     _packet_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
-	char handler[500];
-	sprintf(handler, "hybrid_switch/cop%d.color", dst+1);
-	_packet_label[dst] = new HandlerCall(handler);
-	_packet_label[dst]->initialize(HandlerCall::f_write, this, errh);
+        char handler[500];
+        sprintf(handler, "hybrid_switch/cop%d.color", dst+1);
+        _packet_label[dst] = new HandlerCall(handler);
+        _packet_label[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
-    _ece_map = new HandlerCall("hsl.setECE");
+    _ece_map = new HandlerCall("ecem.setECE");
     _ece_map->initialize(HandlerCall::f_write, this, errh);
 
     _log_config = new HandlerCall("hsl.circuitEvent");
@@ -115,14 +116,12 @@ RunSchedule::initialize(ErrorHandler *errh)
 }
 
 int
-RunSchedule::handler(const String &str, Element *e, void *, ErrorHandler *)
+RunSchedule::set_schedule_handler(const String &str, Element *e, void *,
+                                  ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
 
     pthread_mutex_lock(&(rs->lock));
-    if (rs->next_schedule != str) {
-	rs->new_sched = true;
-    }
     rs->next_schedule = String(str);
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -136,9 +135,9 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
     pthread_mutex_lock(&(rs->lock));
     BoolArg::parse(str, rs->do_resize, ArgContext());
     if (rs->do_resize) {
-	// get sizes based on queues sizes
-	rs->_small_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-	rs->_big_buffer_size = rs->_small_buffer_size * 8;
+        // get sizes based on queues sizes
+        rs->_small_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
+        rs->_big_buffer_size = rs->_small_buffer_size * 8;
 
         printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
                rs->_big_buffer_size);
@@ -186,15 +185,13 @@ RunSchedule::execute_schedule(ErrorHandler *)
     int small_size = _small_buffer_size;
     int big_size = _big_buffer_size;
     int in_advance = _in_advance;
-    bool new_s = new_sched;
-    new_sched = false;
     pthread_mutex_unlock(&lock);
 
         
     _print = (_print+1) % 100;
     if (!_print) {
-	if (current_schedule)
-	    printf("running sched %s\n", current_schedule.c_str());
+        if (current_schedule)
+            printf("running sched %s\n", current_schedule.c_str());
     }
     
     if (current_schedule == "")
@@ -219,42 +216,41 @@ RunSchedule::execute_schedule(ErrorHandler *)
     // cleanup from previous run during a new schedule roll over
     if (new_s && resize) {
         bool *qbig = (bool *)malloc(sizeof(bool) * _num_hosts * _num_hosts);
-	bzero(qbig, sizeof(bool) * _num_hosts * _num_hosts);
+        bzero(qbig, sizeof(bool) * _num_hosts * _num_hosts);
 
-	int remaining = in_advance;
-	for(int k = 0; remaining >= 0; k++) {
-	    for(int dst = 0; dst < _num_hosts; dst++) {
-		int src = configurations[k % num_configurations][dst];
-		if (src == -1)
-		    continue;
-		_queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
-		qbig[src * _num_hosts + dst] = true;
-	    }
-	    remaining -= durations[k % num_configurations];
-	}
-	for(int dst = 0; dst < _num_hosts; dst++) {
-	    for(int src = 0; src < _num_hosts; src++) {
-		if(!qbig[src * _num_hosts + dst])
-		    _queue_capacity[src * _num_hosts + dst]->
-			call_write(String(small_size));
-	    }
-	}
-	free(qbig);
+        int remaining = in_advance;
+        for(int k = 0; remaining >= 0; k++) {
+            for(int dst = 0; dst < _num_hosts; dst++) {
+                int src = configurations[k % num_configurations][dst];
+                if (src == -1)
+                    continue;
+                _queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
+                qbig[src * _num_hosts + dst] = true;
+            }
+            remaining -= durations[k % num_configurations];
+        }
+        for(int dst = 0; dst < _num_hosts; dst++) {
+            for(int src = 0; src < _num_hosts; src++) {
+                if(!qbig[src * _num_hosts + dst])
+                    _queue_capacity[src * _num_hosts + dst]->
+                        call_write(String(small_size));
+            }
+        }
+        free(qbig);
     }
 
     // turn on / off packet switch for special case schedules
     // (e.g., circuit only, packet only)
     // and during a schedule roll over
     if (new_s || num_configurations == 1) {
-	for(int dst = 0; dst < _num_hosts; dst++) {
-	    for(int src = 0; src < _num_hosts; src++) {
-		// packet off only if this (src, dst) pair has circuit
-		int val = configurations[0][dst] == src ? -1 : 0;
-		_packet_pull_switch[src * _num_hosts + dst]->call_write(String(val));
-	    }
-	}
+        for(int dst = 0; dst < _num_hosts; dst++) {
+            for(int src = 0; src < _num_hosts; src++) {
+                // packet off only if this (src, dst) pair has circuit
+                int val = configurations[0][dst] == src ? -1 : 0;
+                _packet_pull_switch[src * _num_hosts + dst]->call_write(String(val));
+            }
+        }
     }
-
 
 
     // for each configuration in schedule
@@ -264,91 +260,91 @@ RunSchedule::execute_schedule(ErrorHandler *)
             int src = configurations[m][dst];
             _pull_switch[dst]->call_write(String(src));
 
-	    if (src == -1) {
-		int next_src = configurations[(m+1) % num_configurations][dst];
-		_packet_pull_switch[next_src * _num_hosts + dst]->
-		    call_write(String(-1));
-	    }
+            if (src == -1) {
+                int next_src = configurations[(m+1) % num_configurations][dst];
+                _packet_pull_switch[next_src * _num_hosts + dst]->
+                    call_write(String(-1));
+            }
 
-	    _circuit_label[dst]->call_write(String(src+1));
-	    _packet_label[dst]->call_write(String(src+1));
+            _circuit_label[dst]->call_write(String(src+1));
+            _packet_label[dst]->call_write(String(src+1));
         }
 
-	char conf[500];
-	bzero(conf, 500);
-	for (int i = 0; i < configurations[m].size(); i++) {
-	    sprintf(&(conf[strlen(conf)]), "%d/", configurations[m][i]);
-	}
-	conf[strlen(conf)-1] = 0;
-	_log_config->call_write(String(conf));
+        char conf[500];
+        bzero(conf, 500);
+        for (int i = 0; i < configurations[m].size(); i++) {
+            sprintf(&(conf[strlen(conf)]), "%d/", configurations[m][i]);
+        }
+        conf[strlen(conf)-1] = 0;
+        _log_config->call_write(String(conf));
 
         // wait duration
         long long elapsed_nano = 0;
         struct timespec ts_new;
         while (elapsed_nano < durations[m] * 1e3) { // duration in microseconds
-	    clock_gettime(CLOCK_MONOTONIC, &ts_new);
-	    long long current_nano = 1e9 * ts_new.tv_sec + ts_new.tv_nsec;
+            clock_gettime(CLOCK_MONOTONIC, &ts_new);
+            long long current_nano = 1e9 * ts_new.tv_sec + ts_new.tv_nsec;
 
-	    if (current_nano > _next_time) {
-		// set ECE
-		char ecem[500];
-		bzero(ecem, 500);
-		int q = 0;
-		int remaining = in_advance + elapsed_nano / 1e3;
-		for(int k = 0; remaining >= 0; k++) {
-		    for(int dst = 0; dst < _num_hosts; dst++) {
-			int src = configurations[(m+k) % num_configurations][dst];
-			if (src == -1)
-			    continue;
-			ecem[q] = src + 1 + '0';
-			ecem[q+1] = dst + 1 + '0';
-			ecem[q+2] = ' ';
-			q += 3;
+            if (current_nano > _next_time) {
+                // set ECE
+                char ecem[500];
+                bzero(ecem, 500);
+                int q = 0;
+                int remaining = in_advance + elapsed_nano / 1e3;
+                for(int k = 0; remaining >= 0; k++) {
+                    for(int dst = 0; dst < _num_hosts; dst++) {
+                        int src = configurations[(m+k) % num_configurations][dst];
+                        if (src == -1)
+                            continue;
+                        ecem[q] = src + 1 + '0';
+                        ecem[q+1] = dst + 1 + '0';
+                        ecem[q+2] = ' ';
+                        q += 3;
 
-			if(resize) { // make the next few days buffer big
-			    _queue_capacity[src * _num_hosts + dst]->
-				call_write(String(big_size));
-			}
-		    }
-		    remaining -= durations[(m+k) % num_configurations];
-		}
-		_ece_map->call_write(String(ecem));
-		_next_time = current_nano - remaining * 1e3;
-	    }
+                        if(resize) { // make the next few days buffer big
+                            _queue_capacity[src * _num_hosts + dst]->
+                                call_write(String(big_size));
+                        }
+                    }
+                    remaining -= durations[(m+k) % num_configurations];
+                }
+                _ece_map->call_write(String(ecem));
+                _next_time = current_nano - remaining * 1e3;
+            }
 
             elapsed_nano = (1e9 * ts_new.tv_sec + ts_new.tv_nsec)
                 - (1e9 * _start_time.tv_sec + _start_time.tv_nsec);
-        }    
+        }
         _start_time = ts_new;
 
         // make this days buffers smaller
-	// only if this (src, dst) pair isn't in the next k configs
+        // only if this (src, dst) pair isn't in the next k configs
         if(resize) {
             for(int dst = 0; dst < _num_hosts; dst++) {
                 int src = configurations[m][dst];
                 if (src == -1)
                     continue;
-		bool not_found = true;
-		int remaining = in_advance;
-		for (int k = 1; remaining >= 0; k++) {
-		    int src2 = configurations[(m + k) % num_configurations][dst];
-		    if (src == src2)
-			not_found = false;
-		    remaining -= durations[(m+k) % num_configurations];
-		}
-		if (not_found) {
-		    _queue_capacity[src * _num_hosts + dst]->
-			call_write(String(small_size));
-		}
+                bool not_found = true;
+                int remaining = in_advance;
+                for (int k = 1; remaining >= 0; k++) {
+                    int src2 = configurations[(m + k) % num_configurations][dst];
+                    if (src == src2)
+                        not_found = false;
+                    remaining -= durations[(m+k) % num_configurations];
+                }
+                if (not_found) {
+                    _queue_capacity[src * _num_hosts + dst]->
+                        call_write(String(small_size));
+                }
             }
         }
 
-	// re-enable packet switch
+        // re-enable packet switch
         for(int dst = 0; dst < _num_hosts; dst++) {
             int src = configurations[m][dst];
-	    if (src != -1) {
-		_packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
-	    }
+            if (src != -1) {
+                _packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
+            }
         }
     }    
     free(durations);
