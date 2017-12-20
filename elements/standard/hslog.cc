@@ -45,10 +45,10 @@ HSLog::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 HSLog::initialize(ErrorHandler* errh)
 {
-    _q13_len = new HandlerCall("hybrid_switch/q13/q.length");
-    _q13_len->initialize(HandlerCall::f_read, this, errh);
-    _q13_cap = new HandlerCall("hybrid_switch/q13/q.capacity");
-    _q13_cap->initialize(HandlerCall::f_read, this, errh);
+    _q12_len = new HandlerCall("hybrid_switch/q12/q.length");
+    _q12_len->initialize(HandlerCall::f_read, this, errh);
+    _q12_cap = new HandlerCall("hybrid_switch/q12/q.capacity");
+    _q12_cap->initialize(HandlerCall::f_read, this, errh);
 
     current_circuits = (int *)malloc(sizeof(int) * (_num_hosts + 1));
     for (int i = 0; i < _num_hosts + 1; i++) {
@@ -84,8 +84,8 @@ HSLog::simple_action(Packet *p)
     latency *= 1e6;
     latency /= 20; // TDF
 
-    int len = atoi(_q13_len->call_read().c_str());
-    int cap = atoi(_q13_cap->call_read().c_str());    
+    int len = atoi(_q12_len->call_read().c_str());
+    int cap = atoi(_q12_cap->call_read().c_str());
 
     int src = p->anno_u8(20);
     int dst = p->anno_u8(21);

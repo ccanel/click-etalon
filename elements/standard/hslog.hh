@@ -36,7 +36,7 @@ private:
     static Vector<String> split(const String&, char);
     int open_log(const char *);
     FILE *_fp;
-    HandlerCall *_q13_len, *_q13_cap;
+    HandlerCall *_q12_len, *_q12_cap;
     int *current_circuits;
     int _num_hosts;
 };
