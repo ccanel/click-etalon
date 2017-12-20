@@ -48,6 +48,7 @@ class RunSchedule : public Element {
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
+    bool new_sched;
     Task _task;
     int _num_hosts;
     int _big_buffer_size;

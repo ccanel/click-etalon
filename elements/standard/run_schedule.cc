@@ -26,7 +26,7 @@
 
 CLICK_DECLS
 
-RunSchedule::RunSchedule() : _task(this), _num_hosts(0),
+RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
                              _big_buffer_size(128), _small_buffer_size(16),
                              _print(0), _in_advance(12000), _next_time(0)
 {
@@ -122,6 +122,8 @@ RunSchedule::set_schedule_handler(const String &str, Element *e, void *,
     RunSchedule *rs = static_cast<RunSchedule *>(e);
 
     pthread_mutex_lock(&(rs->lock));
+    if (rs->next_schedule != str)
+	rs->new_sched = true;
     rs->next_schedule = String(str);
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -185,6 +187,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
     int small_size = _small_buffer_size;
     int big_size = _big_buffer_size;
     int in_advance = _in_advance;
+    bool new_s = new_sched;
+    new_sched = false;
     pthread_mutex_unlock(&lock);
 
         
@@ -363,7 +367,7 @@ RunSchedule::run_task(Task *)
 void
 RunSchedule::add_handlers()
 {
-    add_write_handler("setSchedule", handler, 0);
+    add_write_handler("setSchedule", set_schedule_handler, 0);
     add_write_handler("setDoResize", resize_handler, 0);
     add_write_handler("setInAdvance", in_advance_handler, 0);
 }

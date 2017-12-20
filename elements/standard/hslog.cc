@@ -95,14 +95,14 @@ HSLog::simple_action(Packet *p)
     pthread_mutex_lock(&lock);
     if (is_circuit) { // circuit
         fprintf(_fp, "%s: %d -> %d (%d bytes), circuit, %d %d, %d "
-                "can recv from %d, latency %fus, have_circuit %d\n",
+                "can recv from %d, latency %fus\n",
                 now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
-                dst_can_circuit_recv_from, latency, have_circuit);
+                dst_can_circuit_recv_from, latency);
     } else { // packet
         fprintf(_fp, "%s: %d -> %d (%d bytes), packet, %d %d, %d "
-                "can recv from %d, latency %fus, have_circuit %d\n",
+                "can recv from %d, latency %fus\n",
                 now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
-                dst_can_circuit_recv_from, latency, have_circuit);
+                dst_can_circuit_recv_from, latency);
     }
     pthread_mutex_unlock(&lock);
     return p;

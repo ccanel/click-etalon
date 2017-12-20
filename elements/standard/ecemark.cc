@@ -42,7 +42,7 @@ ECEMark::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-ECEMark::initialize(ErrorHandler* errh)
+ECEMark::initialize(ErrorHandler*)
 {
   ece_map = (int *)malloc(sizeof(int) * (_num_hosts + 1) * (_num_hosts + 1));
   for (int i = 0; i < _num_hosts + 1; i++) {
@@ -58,6 +58,9 @@ Packet *
 ECEMark::simple_action(Packet *p)
 {
     pthread_mutex_lock(&lock);
+    int src = p->anno_u8(20);
+    int dst = p->anno_u8(21);
+
     // change ECN on the ACKS
     bool have_circuit = ece_map[dst * (_num_hosts + 1) + src];
 
@@ -90,7 +93,7 @@ ECEMark::set_ece(const String &str, Element *e, void *, ErrorHandler *)
         int dst = s[i+1] - '0';
         ecem->ece_map[src * hosts + dst] = 1;
     }
-    pthread_mutex_unlock(&(hsl->lock));
+    pthread_mutex_unlock(&(ecem->lock));
     return 0;
 }
 
