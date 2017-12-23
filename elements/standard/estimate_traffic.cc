@@ -326,9 +326,9 @@ EstimateTraffic::run_task(Task *)
         String *tm = new String;
         for(int src = 0; src < _num_hosts; src++) {
             for(int dst = 0; dst < _num_hosts; dst++) {
-                if (tm != "")
-                    tm += " ";
-                tm += String(_traffic_matrix[src * _num_hosts + dst]);
+                if (*tm != "")
+                    *tm += " ";
+                *tm += String(_traffic_matrix[src * _num_hosts + dst]);
             }
         }
         String *temp = output_traffic_matrix;

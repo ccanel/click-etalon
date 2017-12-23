@@ -150,7 +150,7 @@ int
 HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 {
     HSLog *hsl = static_cast<HSLog *>(e);
-    if (hsl->enabled) {
+    if (hsl->_enabled) {
 	int hosts = hsl->_num_hosts + 1;
 	Timestamp now;
 	now.assign_now();
