@@ -27,6 +27,7 @@ CLICK_DECLS
 HSLog::HSLog()
 {
     pthread_mutex_init(&lock, NULL);
+    _enabled = true;
 }
 
 int
@@ -77,34 +78,36 @@ HSLog::open_log(const char *fn)
 Packet *
 HSLog::simple_action(Packet *p)
 {
-    Timestamp now;
-    now.assign_now();
-    float latency = strtof((now - CONST_FIRST_TIMESTAMP_ANNO(p)).unparse().c_str(),
-                           NULL);
-    latency *= 1e6;
-    latency /= 20; // TDF
+    if (_enabled) {
+	Timestamp now;
+	now.assign_now();
+	float latency = strtof((now - CONST_FIRST_TIMESTAMP_ANNO(p)).unparse().c_str(),
+			       NULL);
+	latency *= 1e6;
+	latency /= 20; // TDF
 
-    int len = atoi(_q12_len->call_read().c_str());
-    int cap = atoi(_q12_cap->call_read().c_str());
+	int len = atoi(_q12_len->call_read().c_str());
+	int cap = atoi(_q12_cap->call_read().c_str());
 
-    int src = p->anno_u8(20);
-    int dst = p->anno_u8(21);
-    bool is_circuit = p->anno_u8(22) == 1;
-    int dst_can_circuit_recv_from = p->anno_u8(23);
+	int src = p->anno_u8(20);
+	int dst = p->anno_u8(21);
+	bool is_circuit = p->anno_u8(22) == 1;
+	int dst_can_circuit_recv_from = p->anno_u8(23);
 
-    pthread_mutex_lock(&lock);
-    if (is_circuit) { // circuit
-        fprintf(_fp, "%s: %d -> %d (%d bytes), circuit, %d %d, %d "
-                "can recv from %d, latency %fus\n",
-                now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
-                dst_can_circuit_recv_from, latency);
-    } else { // packet
-        fprintf(_fp, "%s: %d -> %d (%d bytes), packet, %d %d, %d "
-                "can recv from %d, latency %fus\n",
-                now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
-                dst_can_circuit_recv_from, latency);
+	pthread_mutex_lock(&lock);
+	if (is_circuit) { // circuit
+	    fprintf(_fp, "%s: %d -> %d (%d bytes), circuit, %d %d, %d "
+		    "can recv from %d, latency %fus\n",
+		    now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
+		    dst_can_circuit_recv_from, latency);
+	} else { // packet
+	    fprintf(_fp, "%s: %d -> %d (%d bytes), packet, %d %d, %d "
+		    "can recv from %d, latency %fus\n",
+		    now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
+		    dst_can_circuit_recv_from, latency);
+	}
+	pthread_mutex_unlock(&lock);
     }
-    pthread_mutex_unlock(&lock);
     return p;
 }
 
@@ -114,6 +117,17 @@ HSLog::set_log(const String &str, Element *e, void *, ErrorHandler *)
     HSLog *hsl = static_cast<HSLog *>(e);
     pthread_mutex_lock(&(hsl->lock));
     hsl->open_log(str.c_str());
+    hsl->_enabled = true;
+    pthread_mutex_unlock(&(hsl->lock));
+    return 0;
+}
+
+int
+HSLog::disable_log(const String&, Element *e, void *, ErrorHandler *)
+{
+    HSLog *hsl = static_cast<HSLog *>(e);
+    pthread_mutex_lock(&(hsl->lock));
+    hsl->_enabled = false;
     pthread_mutex_unlock(&(hsl->lock));
     return 0;
 }
@@ -136,27 +150,29 @@ int
 HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 {
     HSLog *hsl = static_cast<HSLog *>(e);
-    int hosts = hsl->_num_hosts + 1;
-    Timestamp now;
-    now.assign_now();
-    pthread_mutex_lock(&(hsl->lock));
-    for(int dst = 1; dst < hosts; dst++) {
-        int src = hsl->current_circuits[dst];
-        if (src != 0) {
-            fprintf(hsl->_fp, "%s: closing circuit %d -> %d\n",
-                    now.unparse().c_str(), src, dst);
-        }
+    if (hsl->enabled) {
+	int hosts = hsl->_num_hosts + 1;
+	Timestamp now;
+	now.assign_now();
+	pthread_mutex_lock(&(hsl->lock));
+	for(int dst = 1; dst < hosts; dst++) {
+	    int src = hsl->current_circuits[dst];
+	    if (src != 0) {
+		fprintf(hsl->_fp, "%s: closing circuit %d -> %d\n",
+			now.unparse().c_str(), src, dst);
+	    }
+	}
+	Vector<String> c = HSLog::split(str, '/');
+	for(int dst = 1; dst < hosts; dst++) {
+	    int src = atoi(c[dst-1].c_str()) + 1;
+	    hsl->current_circuits[dst] = src;
+	    if (src != 0) {
+		fprintf(hsl->_fp, "%s: starting circuit %d -> %d\n",
+			now.unparse().c_str(), src, dst);
+	    }
+	}
+	pthread_mutex_unlock(&(hsl->lock));
     }
-    Vector<String> c = HSLog::split(str, '/');
-    for(int dst = 1; dst < hosts; dst++) {
-        int src = atoi(c[dst-1].c_str()) + 1;
-        hsl->current_circuits[dst] = src;
-        if (src != 0) {
-            fprintf(hsl->_fp, "%s: starting circuit %d -> %d\n",
-                    now.unparse().c_str(), src, dst);
-        }
-    }
-    pthread_mutex_unlock(&(hsl->lock));
     return 0;
 }
 
@@ -164,6 +180,7 @@ void
 HSLog::add_handlers()
 {
     add_write_handler("openLog", set_log, 0);
+    add_write_handler("disableLog", disable_log, 0);
     add_write_handler("circuitEvent", set_circuit_event, 0);
 }
 

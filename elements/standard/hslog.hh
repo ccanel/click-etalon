@@ -32,6 +32,7 @@ class HSLog : public Element { public:
 
 private:
     static int set_log(const String&, Element*, void*, ErrorHandler*);
+    static int disable_log(const String&, Element*, void*, ErrorHandler*);
     static int set_circuit_event(const String&, Element*, void*, ErrorHandler*);
     static Vector<String> split(const String&, char);
     int open_log(const char *);
@@ -39,6 +40,7 @@ private:
     HandlerCall *_q12_len, *_q12_cap;
     int *current_circuits;
     int _num_hosts;
+    bool _enabled;
 };
 
 CLICK_ENDDECLS
