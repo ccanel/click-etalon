@@ -18,14 +18,12 @@
 
 #include <click/config.h>
 #include "fullnotequeue.hh"
-#include <pthread.h>
 #include <clicknet/tcp.h>
 
 CLICK_DECLS
 
 FullNoteQueue::FullNoteQueue()
 {
-    pthread_mutex_init(&_lock, NULL);
     enqueue_bytes = 0;
     dequeue_bytes = 0;
 }
@@ -61,7 +59,6 @@ FullNoteQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
 void
 FullNoteQueue::push(int, Packet *p)
 {
-    pthread_mutex_lock(&_lock);
     // Code taken from SimpleQueue::push().
     Storage::index_type h = head(), t = tail(), nt = next_i(t);
 
@@ -70,15 +67,13 @@ FullNoteQueue::push(int, Packet *p)
         enqueue_bytes += p->length();
     }
     else {
-	push_failure(p);
+        push_failure(p);
     }
-    pthread_mutex_unlock(&_lock);
 }
 
 Packet *
 FullNoteQueue::pull(int)
 {
-    pthread_mutex_lock(&_lock);
     // Code taken from SimpleQueue::deq.
     Storage::index_type h = head(), t = tail(), nh = next_i(h);
 
@@ -86,23 +81,21 @@ FullNoteQueue::pull(int)
         Packet *p = pull_success(h, nh);
         dequeue_bytes += p->length();
 
-	if (p->has_transport_header()) {
-	    int tplen = p->transport_length();
-	    const click_ip *ipp = p->ip_header();
-	    if (ipp->ip_p == IP_PROTO_TCP) { // TCP
-		tplen -= p->tcp_header()->th_off * 4;
-	    }
-	    else if (ipp->ip_p == IP_PROTO_UDP) { // UDP
-		tplen -= 8;
-	    }
-	    dequeue_bytes_no_headers += tplen;
-	}
-	pthread_mutex_unlock(&_lock);
+        if (p->has_transport_header()) {
+            int tplen = p->transport_length();
+            const click_ip *ipp = p->ip_header();
+            if (ipp->ip_p == IP_PROTO_TCP) { // TCP
+                tplen -= p->tcp_header()->th_off * 4;
+            }
+            else if (ipp->ip_p == IP_PROTO_UDP) { // UDP
+                tplen -= 8;
+            }
+            dequeue_bytes_no_headers += tplen;
+        }
         return p;
     }
     else {
-	pthread_mutex_unlock(&_lock);
-	return pull_failure();
+        return pull_failure();
     }
 }
 
@@ -148,30 +141,22 @@ FullNoteQueue::read_bytes(Element *e, void *)
 {
     FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
 
-    pthread_mutex_lock(&(fq->_lock));
     int byte_count = 0;
     Storage::index_type h = fq->head(), t = fq->tail();
     while (h != t) {
-	byte_count += fq->_q[h]->length();
-	h = fq->next_i(h);
+        byte_count += fq->_q[h]->length();
+        h = fq->next_i(h);
     }
-    String r = String(byte_count);
-    pthread_mutex_unlock(&(fq->_lock));
-    
-    return r;
+    return String(byte_count);
 }
 
 int
 FullNoteQueue::resize_capacity(const String &str, Element *e, void *, ErrorHandler *errh)
 {
     FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-    pthread_mutex_lock(&(fq->_lock));
-
     Vector<String> conf;
     conf.push_back("CAPACITY " + str);
     fq->live_reconfigure(conf, errh);
-
-    pthread_mutex_unlock(&(fq->_lock));
     return 0;
 }
 
@@ -179,10 +164,7 @@ String
 FullNoteQueue::get_resize_capacity(Element *e, void *)
 {
     FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-    pthread_mutex_lock(&(fq->_lock));
-    int cap = fq->_capacity;
-    pthread_mutex_unlock(&(fq->_lock));
-    return String(cap);
+    return String(fq->_capacity);
 }
 
 void
