@@ -21,12 +21,10 @@
 #include "ecemark.hh"
 #include <click/args.hh>
 #include <clicknet/tcp.h>
-#include <pthread.h>
 CLICK_DECLS
 
 ECEMark::ECEMark()
 {
-    pthread_mutex_init(&lock, NULL);
 }
 
 int
@@ -57,7 +55,6 @@ ECEMark::initialize(ErrorHandler*)
 Packet *
 ECEMark::simple_action(Packet *p)
 {
-    pthread_mutex_lock(&lock);
     int src = p->anno_u8(20);
     int dst = p->anno_u8(21);
 
@@ -72,7 +69,6 @@ ECEMark::simple_action(Packet *p)
             p = q;
         }
     }
-    pthread_mutex_unlock(&lock);
     return p;
 }
 
@@ -81,19 +77,17 @@ ECEMark::set_ece(const String &str, Element *e, void *, ErrorHandler *)
 {
     ECEMark *ecem = static_cast<ECEMark *>(e);
     int hosts = ecem->_num_hosts + 1;
-    pthread_mutex_lock(&(ecem->lock));
-    for(int i = 1; i < hosts; i++) {
-        for(int j = 1; j < hosts; j++) {
-            ecem->ece_map[i * hosts + j] = 0;
-        }
-    }
+    int *emap = (int *)malloc(sizeof(int) * hosts * hosts);
+    bzero(emap, sizeof(int) * hosts * hosts);
     const char *s = str.c_str();
     for(unsigned int i = 0; i < strlen(s); i += 3) {
         int src = s[i] - '0'; // convert char digit to int;
         int dst = s[i+1] - '0';
-        ecem->ece_map[src * hosts + dst] = 1;
+        emap[src * hosts + dst] = 1;
     }
-    pthread_mutex_unlock(&(ecem->lock));
+    int *temp = ecem->ece_map;
+    ecem->ece_map = emap;
+    free(temp);
     return 0;
 }
 

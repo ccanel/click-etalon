@@ -2,7 +2,6 @@
 #ifndef CLICK_ECEMARK_HH
 #define CLICK_ECEMARK_HH
 #include <click/element.hh>
-#include <pthread.h>
 CLICK_DECLS
 
 /* =c
@@ -27,8 +26,6 @@ class ECEMark : public Element { public:
     void add_handlers() CLICK_COLD;
     
     Packet *simple_action(Packet *);
-
-    pthread_mutex_t lock;
 
 private:
     static int set_ece(const String&, Element*, void*, ErrorHandler*);
