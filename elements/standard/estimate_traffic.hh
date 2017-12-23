@@ -3,7 +3,6 @@
 #define CLICK_ESTIMATE_TRAFFIC_HH
 #include <click/element.hh>
 #include <click/timer.hh>
-#include <pthread.h>
 CLICK_DECLS
 
 /*
@@ -36,8 +35,7 @@ class EstimateTraffic : public Element {
 
     bool run_task(Task *);
     String source;
-    String output_traffic_matrix;
-    pthread_mutex_t lock;
+    String *output_traffic_matrix;
 
   private:
     static int set_source(const String&, Element*, void*, ErrorHandler*) CLICK_COLD;

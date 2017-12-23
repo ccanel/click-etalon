@@ -2,7 +2,6 @@
 #ifndef CLICK_FULLNOTEQUEUE_HH
 #define CLICK_FULLNOTEQUEUE_HH
 #include "notifierqueue.hh"
-#include <pthread.h>
 CLICK_DECLS
 
 /*
@@ -106,8 +105,6 @@ class FullNoteQueue : public NotifierQueue { public:
     static String read_bytes(Element *e, void *user_data);
     static int resize_capacity(const String&, Element*, void*, ErrorHandler*);
     static String get_resize_capacity(Element *e, void *user_data);
-
-    pthread_mutex_t _lock;
 };
 
 inline void

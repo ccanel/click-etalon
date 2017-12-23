@@ -123,7 +123,7 @@ RunSchedule::set_schedule_handler(const String &str, Element *e, void *,
 
     pthread_mutex_lock(&(rs->lock));
     if (rs->next_schedule != str)
-	rs->new_sched = true;
+        rs->new_sched = true;
     rs->next_schedule = String(str);
     pthread_mutex_unlock(&(rs->lock));
     return 0;

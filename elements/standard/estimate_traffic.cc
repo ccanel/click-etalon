@@ -33,7 +33,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <pthread.h>
 #include <signal.h>
 #include <errno.h>
 
@@ -79,6 +78,8 @@ EstimateTraffic::configure(Vector<String> &conf, ErrorHandler *errh)
 
     _print = 0;
 
+    output_traffic_matrix = new String;
+
     return 0;
 }
  
@@ -86,7 +87,6 @@ int
 EstimateTraffic::initialize(ErrorHandler *errh)
 {
     ScheduleInfo::initialize_task(this, &_task, true, errh);
-    pthread_mutex_init(&lock, NULL);
     
 #if defined(__linux__)
     sched_setscheduler(getpid(), SCHED_RR, NULL);
@@ -323,17 +323,17 @@ EstimateTraffic::run_task(Task *)
         }
 
         // copy TM to store for handler
-        pthread_mutex_lock(&lock);
-        output_traffic_matrix = String();
+        String *tm = new String;
         for(int src = 0; src < _num_hosts; src++) {
             for(int dst = 0; dst < _num_hosts; dst++) {
-                if (output_traffic_matrix != "")
-                    output_traffic_matrix += " ";
-                output_traffic_matrix += String(_traffic_matrix[src *
-                                                                _num_hosts + dst]);
+                if (tm != "")
+                    tm += " ";
+                tm += String(_traffic_matrix[src * _num_hosts + dst]);
             }
         }
-        pthread_mutex_unlock(&lock);
+        String *temp = output_traffic_matrix;
+        output_traffic_matrix = tm;
+        delete temp;
 
         _print = (_print + 1) % 100000;
 	
@@ -379,9 +379,7 @@ String
 EstimateTraffic::get_traffic(Element *e, void *)
 {
     EstimateTraffic *et = static_cast<EstimateTraffic *>(e);
-    pthread_mutex_lock(&et->lock);
     String out = String(et->output_traffic_matrix);
-    pthread_mutex_unlock(&et->lock);
     return out;
 }
 
