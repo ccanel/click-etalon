@@ -3,6 +3,7 @@
 #define CLICK_ESTIMATE_TRAFFIC_HH
 #include <click/element.hh>
 #include <click/timer.hh>
+#include <pthread.h>
 CLICK_DECLS
 
 /*
@@ -58,6 +59,8 @@ class EstimateTraffic : public Element {
     HandlerCall **_queue_dequeue_bytes_no_headers;
     HandlerCall **_queue_enqueue_bytes;
     HandlerCall **_queue_bytes;
+
+    pthread_mutex_t _lock;
 };
 
 CLICK_ENDDECLS

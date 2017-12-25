@@ -35,6 +35,7 @@
 #include <netdb.h>
 #include <signal.h>
 #include <errno.h>
+#include <pthread.h>
 
 CLICK_DECLS
 
@@ -46,6 +47,7 @@ struct traffic_info {
 
 EstimateTraffic::EstimateTraffic() : _task(this)
 {
+    pthread_mutex_init(&_lock, NULL);
 }
 
 int
@@ -70,11 +72,11 @@ EstimateTraffic::configure(Vector<String> &conf, ErrorHandler *errh)
     _dequeue_matrix = (long long *)malloc(sizeof(long long) *
                                           _num_hosts * _num_hosts);
 
-    memset(_traffic_matrix, 0, sizeof(long long) * _num_hosts * _num_hosts);
-    memset(_adu_enqueue_matrix, 0, sizeof(long long) * _num_hosts * _num_hosts);
-    memset(_enqueue_matrix, 0, sizeof(long long) * _num_hosts * _num_hosts);
-    memset(_adu_dequeue_matrix, 0, sizeof(long long) * _num_hosts * _num_hosts);
-    memset(_dequeue_matrix, 0, sizeof(long long) * _num_hosts * _num_hosts);
+    bzero(_traffic_matrix, sizeof(long long) * _num_hosts * _num_hosts);
+    bzero(_adu_enqueue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
+    bzero(_enqueue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
+    bzero(_adu_dequeue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
+    bzero(_dequeue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
 
     _print = 0;
 
@@ -331,12 +333,14 @@ EstimateTraffic::run_task(Task *)
                 *tm += String(_traffic_matrix[src * _num_hosts + dst]);
             }
         }
+	pthread_mutex_lock(&_lock);
         String *temp = output_traffic_matrix;
         output_traffic_matrix = tm;
         delete temp;
+	pthread_mutex_unlock(&_lock);
 
         _print = (_print + 1) % 100000;
-	
+
         // if (_print == 0) {
         //     // printf("tm on et side = %s\n", output_traffic_matrix.c_str());
         //     int psrc = 0;
@@ -379,7 +383,9 @@ String
 EstimateTraffic::get_traffic(Element *e, void *)
 {
     EstimateTraffic *et = static_cast<EstimateTraffic *>(e);
-    String out = String(et->output_traffic_matrix);
+    pthread_mutex_lock(&(et->_lock));
+    String out = String(et->output_traffic_matrix->c_str());
+    pthread_mutex_unlock(&(et->_lock));
     return out;
 }
 
