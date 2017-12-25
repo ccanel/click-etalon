@@ -49,6 +49,7 @@ Solstice::configure(Vector<String> &conf, ErrorHandler *errh)
 
     _traffic_matrix = (long long *)malloc(sizeof(long long)
                                           * _num_hosts * _num_hosts);
+    bzero(_traffic_matrix, sizeof(long long) * _num_hosts * _num_hosts);
 
     sols_init(&_s, _num_hosts);
     _s.night_len = reconfig_delay * tdf;  // reconfiguration us
