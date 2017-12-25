@@ -24,8 +24,6 @@ CLICK_DECLS
 
 FullNoteQueue::FullNoteQueue()
 {
-    enqueue_bytes = 0;
-    dequeue_bytes = 0;
 }
 
 void *
@@ -62,13 +60,10 @@ FullNoteQueue::push(int, Packet *p)
     // Code taken from SimpleQueue::push().
     Storage::index_type h = head(), t = tail(), nt = next_i(t);
 
-    if (nt != h) {
+    if (nt != h)
         push_success(h, t, nt, p);
-        enqueue_bytes += p->length();
-    }
-    else {
+    else
         push_failure(p);
-    }
 }
 
 Packet *
@@ -77,26 +72,10 @@ FullNoteQueue::pull(int)
     // Code taken from SimpleQueue::deq.
     Storage::index_type h = head(), t = tail(), nh = next_i(h);
 
-    if (h != t) {
-        Packet *p = pull_success(h, nh);
-        dequeue_bytes += p->length();
-
-        if (p->has_transport_header()) {
-            int tplen = p->transport_length();
-            const click_ip *ipp = p->ip_header();
-            if (ipp->ip_p == IP_PROTO_TCP) { // TCP
-                tplen -= p->tcp_header()->th_off * 4;
-            }
-            else if (ipp->ip_p == IP_PROTO_UDP) { // UDP
-                tplen -= 8;
-            }
-            dequeue_bytes_no_headers += tplen;
-        }
-        return p;
-    }
-    else {
+    if (h != t)
+        return pull_success(h, nh);
+    else
         return pull_failure();
-    }
 }
 
 #if CLICK_DEBUG_SCHEDULING
@@ -115,69 +94,6 @@ FullNoteQueue::add_handlers()
     add_read_handler("notifier_state", read_handler, 0);
 }
 #else
-String
-FullNoteQueue::read_enqueue_bytes(Element *e, void *)
-{
-    FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-    return String(fq->enqueue_bytes);
-}
-
-String
-FullNoteQueue::read_dequeue_bytes(Element *e, void *)
-{
-    FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-    return String(fq->dequeue_bytes);
-}
-
-String
-FullNoteQueue::read_dequeue_bytes_no_headers(Element *e, void *)
-{
-    FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-    return String(fq->dequeue_bytes_no_headers);
-}
-
-String
-FullNoteQueue::read_bytes(Element *e, void *)
-{
-    FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-
-    int byte_count = 0;
-    Storage::index_type h = fq->head(), t = fq->tail();
-    while (h != t) {
-        byte_count += fq->_q[h]->length();
-        h = fq->next_i(h);
-    }
-    return String(byte_count);
-}
-
-int
-FullNoteQueue::resize_capacity(const String &str, Element *e, void *, ErrorHandler *errh)
-{
-    FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-    Vector<String> conf;
-    conf.push_back("CAPACITY " + str);
-    fq->live_reconfigure(conf, errh);
-    return 0;
-}
-
-String
-FullNoteQueue::get_resize_capacity(Element *e, void *)
-{
-    FullNoteQueue *fq = static_cast<FullNoteQueue *>(e);
-    return String(fq->_capacity);
-}
-
-void
-FullNoteQueue::add_handlers()
-{
-    NotifierQueue::add_handlers();
-    add_read_handler("enqueue_bytes", read_enqueue_bytes, 0);
-    add_read_handler("dequeue_bytes", read_dequeue_bytes, 0);
-    add_read_handler("dequeue_bytes_no_headers", read_dequeue_bytes_no_headers, 0);
-    add_read_handler("bytes", read_bytes, 0);
-    add_write_handler("resize_capacity", resize_capacity, 0);
-    add_read_handler("resize_capacity", get_resize_capacity, 0);
-}
 #endif
 
 CLICK_ENDDECLS

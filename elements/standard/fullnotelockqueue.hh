@@ -1,7 +1,8 @@
 // -*- c-basic-offset: 4 -*-
-#ifndef CLICK_FULLNOTEQUEUE_HH
-#define CLICK_FULLNOTEQUEUE_HH
+#ifndef CLICK_FULLNOTELOCKQUEUE_HH
+#define CLICK_FULLNOTELOCKQUEUE_HH
 #include "notifierqueue.hh"
+#include <pthread.h>
 CLICK_DECLS
 
 /*
@@ -29,7 +30,7 @@ notifies interested parties that it is non-full, and when a formerly-full
 queue gains some free space.  In all respects but notification, Queue behaves
 exactly like SimpleQueue.
 
-You may also use the old element name "FullNoteQueue".
+You may also use the old element name "FullNoteLockQueue".
 
 B<Multithreaded Click note:> Queue is designed to be used in an environment
 with at most one concurrent pusher and at most one concurrent puller.  Thus,
@@ -65,23 +66,27 @@ When written, drops all packets in the queue.
 =a ThreadSafeQueue, QuickNoteQueue, SimpleQueue, NotifierQueue, MixedQueue,
 FrontDropQueue */
 
-class FullNoteQueue : public NotifierQueue { public:
+class FullNoteLockQueue : public NotifierQueue { public:
 
-    FullNoteQueue() CLICK_COLD;
+    FullNoteLockQueue() CLICK_COLD;
 
-    const char *class_name() const		{ return "Queue"; }
+    const char *class_name() const		{ return "LockQueue"; }
     void *cast(const char *);
 
     int configure(Vector<String> &conf, ErrorHandler *) CLICK_COLD;
     int live_reconfigure(Vector<String> &conf, ErrorHandler *errh);
-    #if CLICK_DEBUG_SCHEDULING
+    //#if CLICK_DEBUG_SCHEDULING
     void add_handlers() CLICK_COLD;
-    #endif
+    //#endif
 
     void push(int port, Packet *p);
     Packet *pull(int port);
 
   protected:
+
+    unsigned long long enqueue_bytes;
+    unsigned long long dequeue_bytes;
+    unsigned long long dequeue_bytes_no_headers;
 
     ActiveNotifier _full_note;
 
@@ -95,10 +100,18 @@ class FullNoteQueue : public NotifierQueue { public:
 #if CLICK_DEBUG_SCHEDULING
     static String read_handler(Element *e, void *user_data) CLICK_COLD;
 #endif
+    static String read_enqueue_bytes(Element *e, void *user_data);
+    static String read_dequeue_bytes(Element *e, void *user_data);
+    static String read_dequeue_bytes_no_headers(Element *e, void *user_data);
+    static String read_bytes(Element *e, void *user_data);
+    static int resize_capacity(const String&, Element*, void*, ErrorHandler*);
+    static String get_resize_capacity(Element *e, void *user_data);
+
+    pthread_mutex_t _lock;
 };
 
 inline void
-FullNoteQueue::push_success(Storage::index_type h, Storage::index_type t,
+FullNoteLockQueue::push_success(Storage::index_type h, Storage::index_type t,
 			    Storage::index_type nt, Packet *p)
 {
     _q[t] = p;
@@ -123,7 +136,7 @@ FullNoteQueue::push_success(Storage::index_type h, Storage::index_type t,
 }
 
 inline void
-FullNoteQueue::push_failure(Packet *p)
+FullNoteLockQueue::push_failure(Packet *p)
 {
     if (_drops == 0 && _capacity > 0)
 	click_chatter("%p{element}: overflow", this);
@@ -132,7 +145,7 @@ FullNoteQueue::push_failure(Packet *p)
 }
 
 inline Packet *
-FullNoteQueue::pull_success(Storage::index_type h,
+FullNoteLockQueue::pull_success(Storage::index_type h,
 			    Storage::index_type nh)
 {
     Packet *p = _q[h];
@@ -144,7 +157,7 @@ FullNoteQueue::pull_success(Storage::index_type h,
 }
 
 inline Packet *
-FullNoteQueue::pull_failure()
+FullNoteLockQueue::pull_failure()
 {
     if (_sleepiness >= SLEEPINESS_TRIGGER) {
         _empty_note.sleep();
