@@ -28,6 +28,7 @@ FullNoteLockQueue::FullNoteLockQueue()
     pthread_mutex_init(&_lock, NULL);
     enqueue_bytes = 0;
     dequeue_bytes = 0;
+    dequeue_bytes_no_headers = 0;
 }
 
 void *
