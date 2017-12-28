@@ -40,6 +40,7 @@ class EstimateTraffic : public Element {
 
   private:
     static int set_source(const String&, Element*, void*, ErrorHandler*) CLICK_COLD;
+    static int clear(const String&, Element*, void*, ErrorHandler*) CLICK_COLD;
     static String get_traffic(Element *e, void *user_data);
 
     int _serverSocket;
