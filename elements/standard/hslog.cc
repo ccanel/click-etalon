@@ -22,6 +22,8 @@
 #include <click/packet_anno.hh>
 #include <click/args.hh>
 #include <pthread.h>
+#include <clicknet/ip.h>
+#include <clicknet/tcp.h>
 CLICK_DECLS
 
 HSLog::HSLog()
@@ -94,17 +96,29 @@ HSLog::simple_action(Packet *p)
 	bool is_circuit = p->anno_u8(22) == 1;
 	int dst_can_circuit_recv_from = p->anno_u8(23);
 
+	const click_ip *ipp = p->ip_header();
+	struct in_addr src_ip = ipp->ip_src;
+	struct in_addr dst_ip = ipp->ip_dst;
+	if (ipp->ip_p != IP_PROTO_TCP) {
+	    printf("non TCP\n");
+	    exit(EXIT_FAILURE);
+	}
+	uint16_t sport = p->tcp_header()->th_sport;
+	uint16_t dport = p->tcp_header()->th_dport;
+
 	pthread_mutex_lock(&lock);
 	if (is_circuit) { // circuit
 	    fprintf(_fp, "%s: %d -> %d (%d bytes), circuit, %d %d, %d "
-		    "can recv from %d, latency %fus\n",
+		    "can recv from %d, %s, %s, %d %d, latency %fus\n",
 		    now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
-		    dst_can_circuit_recv_from, latency);
+		    dst_can_circuit_recv_from, IPAddress(src_ip).unparse().c_str(),
+		    IPAddress(dst_ip).unparse().c_str(), sport, dport, latency);
 	} else { // packet
 	    fprintf(_fp, "%s: %d -> %d (%d bytes), packet, %d %d, %d "
-		    "can recv from %d, latency %fus\n",
+		    "can recv from %d, %s, %s, %d %d, latency %fus\n",
 		    now.unparse().c_str(), src, dst, p->length(), len, cap, dst,
-		    dst_can_circuit_recv_from, latency);
+		    dst_can_circuit_recv_from, IPAddress(src_ip).unparse().c_str(),
+		    IPAddress(dst_ip).unparse().c_str(), sport, dport, latency);
 	}
 	pthread_mutex_unlock(&lock);
     }
