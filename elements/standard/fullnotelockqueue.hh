@@ -3,6 +3,8 @@
 #define CLICK_FULLNOTELOCKQUEUE_HH
 #include "notifierqueue.hh"
 #include <pthread.h>
+#include <unordered_map>
+#include <tuple>
 CLICK_DECLS
 
 /*
@@ -66,6 +68,35 @@ When written, drops all packets in the queue.
 =a ThreadSafeQueue, QuickNoteQueue, SimpleQueue, NotifierQueue, MixedQueue,
 FrontDropQueue */
 
+typedef std::tuple<struct in_addr, struct in_addr, uint16_t, uint16_t, uint32_t> tcp_and_seq;
+
+struct key_hash : public std::unary_function<tcp_and_seq, std::size_t>
+{
+    std::size_t operator()(const tcp_and_seq& k) const
+    {
+	uint32_t src = IPAddress(std::get<0>(k)).addr();
+	uint32_t dst = IPAddress(std::get<1>(k)).addr();
+	uint32_t sport = (uint32_t)std::get<2>(k);
+	uint32_t dport = (uint32_t)std::get<3>(k);
+	uint32_t seq = std::get<4>(k);
+	return src ^ dst ^ sport ^ dport ^ seq;
+    }
+};
+
+struct key_equal : public std::binary_function<tcp_and_seq, tcp_and_seq, bool>
+{
+    bool operator()(const tcp_and_seq& v0, const tcp_and_seq& v1) const
+    {
+	return (
+		std::get<0>(v0) == std::get<0>(v1) &&
+		std::get<1>(v0) == std::get<1>(v1) &&
+		std::get<2>(v0) == std::get<2>(v1) &&
+		std::get<3>(v0) == std::get<3>(v1) &&
+		std::get<4>(v0) == std::get<4>(v1)
+		);
+    }
+};
+
 class FullNoteLockQueue : public NotifierQueue { public:
 
     FullNoteLockQueue() CLICK_COLD;
@@ -106,6 +137,9 @@ class FullNoteLockQueue : public NotifierQueue { public:
     static String read_bytes(Element *e, void *user_data);
     static int resize_capacity(const String&, Element*, void*, ErrorHandler*);
     static String get_resize_capacity(Element *e, void *user_data);
+    static int clear(const String&, Element*, void*, ErrorHandler*);
+
+    std::unordered_map<const tcp_and_seq, Timestamp, key_hash, key_equal> seen_seq;
 
     pthread_mutex_t _lock;
 };
