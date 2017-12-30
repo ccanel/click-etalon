@@ -275,6 +275,8 @@ EstimateTraffic::run_task(Task *)
                             fprintf(stderr, "bad net type... exiting\n");
                             exit(EXIT_FAILURE);
                         }
+			if (net_type == 2)
+			    continue;
 
 			dot_count = 0;
                         for(pos = 0; pos < INET_ADDRSTRLEN; pos++) {
