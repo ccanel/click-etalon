@@ -313,7 +313,7 @@ EstimateTraffic::run_task(Task *)
                             exit(EXIT_FAILURE);
                         }
 
-			if (net_type == 1) {
+			if (net_type == 1 && src != dst) {
 			    // printf("src = %d dst = %d\n", src, dst);
 			    _adu_enqueue_matrix[src * _num_hosts + dst] += info.size;
 			}
