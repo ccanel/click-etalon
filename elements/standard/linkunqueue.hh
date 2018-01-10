@@ -6,6 +6,7 @@
 #include <click/timer.hh>
 #include <click/notifier.hh>
 #include <click/standard/storage.hh>
+#include <pthread.h>
 CLICK_DECLS
 
 /*
@@ -85,6 +86,12 @@ class LinkUnqueue : public Element, public Storage { public:
     NotifierSignal _signal;
     NotifierSignal _can_push_signal;
 
+    long long _total_bytes;
+
+    pthread_mutex_t _lock;
+
+    static int clear(const String&, Element*, void*, ErrorHandler*);
+    static String get_total_bytes(Element *e, void *user_data);
     void delay_by_bandwidth(Packet *, const Timestamp &) const;
     static String read_param(Element *, void *) CLICK_COLD;
     static int write_handler(const String &, Element *, void *, ErrorHandler *) CLICK_COLD;

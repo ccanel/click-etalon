@@ -27,11 +27,13 @@
 #include "linkunqueue.hh"
 #include <click/standard/scheduleinfo.hh>
 #include <click/packet_anno.hh>
+#include <pthread.h>
 CLICK_DECLS
 
 LinkUnqueue::LinkUnqueue()
-    : _qhead(0), _qtail(0), _task(this), _timer(&_task)
+    : _qhead(0), _qtail(0), _task(this), _timer(&_task), _total_bytes(0)
 {
+    pthread_mutex_init(&_lock, NULL);
 }
 
 void *
@@ -148,7 +150,11 @@ LinkUnqueue::run_task(Task *)
 	    _qtail = 0;
 	p->set_next(0);
 	//click_chatter("%p{timestamp}: RELEASE %p{timestamp}", &now, &p->timestamp_anno());
+	int packet_size = p->length();
 	output(0).push(p);
+	pthread_mutex_lock(&_lock);
+	_total_bytes += packet_size;
+	pthread_mutex_unlock(&_lock);
 	Storage::set_tail(Storage::tail() - 1);
 	worked = true;
     }
@@ -241,15 +247,38 @@ LinkUnqueue::write_handler(const String &s, Element *e, void *thunk, ErrorHandle
     return 0;
 }
 
+int
+LinkUnqueue::clear(const String &, Element *e, void *,
+		   ErrorHandler *)
+{
+    LinkUnqueue *lu = static_cast<LinkUnqueue *>(e);
+    pthread_mutex_lock(&(lu->_lock));
+    lu->_total_bytes = 0;
+    pthread_mutex_unlock(&(lu->_lock));
+    return 0;
+}
+
+String
+LinkUnqueue::get_total_bytes(Element *e, void *)
+{
+    LinkUnqueue *lu = static_cast<LinkUnqueue *>(e);
+    pthread_mutex_lock(&(lu->_lock));
+    long long bytes = lu->_total_bytes;
+    pthread_mutex_unlock(&(lu->_lock));
+    return String(bytes);
+}
+
 void
 LinkUnqueue::add_handlers()
 {
     add_read_handler("latency", read_param, H_LATENCY, Handler::CALM);
     add_read_handler("bandwidth", read_param, H_BANDWIDTH, Handler::CALM);
     add_read_handler("size", read_param, H_SIZE);
+    add_read_handler("total_bytes", get_total_bytes, 0);
     add_write_handler("reset", write_handler, H_RESET, Handler::BUTTON);
     add_write_handler("latency", write_handler, H_LATENCY);
     add_write_handler("bandwidth", write_handler, H_BANDWIDTH);
+    add_write_handler("clear", clear, 0);
     add_task_handlers(&_task);
 }
 
