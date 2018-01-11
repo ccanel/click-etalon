@@ -22,7 +22,6 @@
 #include <click/error.hh>
 #include <click/standard/scheduleinfo.hh>
 #include <sys/select.h>
-#include <algorithm>
 
 CLICK_DECLS
 
@@ -131,6 +130,25 @@ Solstice::run_task(Task *)
             }
         }
 
+	// if some demand is greater than 1,000,000,
+	// ignore demand lower than 1,000,000
+	bool big_demand = false;
+	for (int src = 0; src < _num_hosts; src++) {
+	    for (int dst = 0; dst < _num_hosts; dst++) {
+		if (sols_mat_get(&_s.future, src, dst) >= 1000000)
+		    big_demand = true;
+	    }
+	}
+	if (big_demand) {
+	    for (int src = 0; src < _num_hosts; src++) {
+		for (int dst = 0; dst < _num_hosts; dst++) {
+		    if (sols_mat_get(&_s.future, src, dst) < 1000000) {
+			sols_mat_set(&_s.future, src, dst, 0);
+		    }
+		}
+	    }
+	}
+
         /* inflate demand to 1/2 weeklen */
         /* find largest row or column sum and increase demand to 1/2 weeklen */
         /* allows solstice to schedule small flows letting TCP grow */
@@ -151,7 +169,6 @@ Solstice::run_task(Task *)
                 max_col = current_col;
         }
         double min_demand = _s.week_len * _s.link_bw * 0.5;
-	double max_demand_per_slot = _s.week_len * _s.link_bw * 0.25;
         double scale_factor = 0;
         if (max_row || max_col) {
             scale_factor = max_row > max_col ?
@@ -163,7 +180,7 @@ Solstice::run_task(Task *)
         for (int dst = 0; dst < _num_hosts; dst++) {
             for (int src = 0; src < _num_hosts; src++) {
                 uint64_t current = sols_mat_get(&_s.future, src, dst);
-                uint64_t v = std::min(current * scale_factor, max_demand_per_slot);
+                uint64_t v = current * scale_factor;
                 sols_mat_set(&_s.future, src, dst, static_cast<uint64_t>(v));
                 if (v)
                     empty_demand = 0;
