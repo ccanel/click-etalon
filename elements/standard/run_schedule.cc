@@ -321,6 +321,16 @@ RunSchedule::execute_schedule(ErrorHandler *)
         }
         _start_time = ts_new;
 
+	// if (num_configurations == 2 && m == 0) {
+	//     pthread_mutex_lock(&lock);
+	//     if (!new_sched) {
+	// 	// same single configuration next round... skip down time
+	// 	pthread_mutex_unlock(&lock);
+	// 	break;
+	//     }
+	//     pthread_mutex_unlock(&lock);
+	// }
+
         // make this days buffers smaller
         // only if this (src, dst) pair isn't in the next k configs
         if(resize) {
