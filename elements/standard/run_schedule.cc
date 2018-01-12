@@ -264,7 +264,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
             int src = configurations[m][dst];
             _pull_switch[dst]->call_write(String(src));
 
-            if (src == -1) {
+            if (src == -1 && num_configurations > 1) {
                 int next_src = configurations[(m+1) % num_configurations][dst];
                 _packet_pull_switch[next_src * _num_hosts + dst]->
                     call_write(String(-1));
