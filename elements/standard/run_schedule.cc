@@ -270,8 +270,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
                     call_write(String(-1));
             }
 
-            _circuit_label[dst]->call_write(String(src+1));
-            _packet_label[dst]->call_write(String(src+1));
+            // _circuit_label[dst]->call_write(String(src+1));
+            // _packet_label[dst]->call_write(String(src+1));
         }
 
         char conf[500];

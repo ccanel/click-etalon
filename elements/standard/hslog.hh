@@ -15,6 +15,15 @@ CLICK_DECLS
  *
  * =a AlignmentInfo, click-align(1) */
 
+typedef struct {
+    int type;
+    char ts[32];
+    int latency;
+    int src;
+    int dst;
+    char data[64];
+} hsl_s;
+
 class HSLog : public Element { public:
 
     HSLog() CLICK_COLD;
