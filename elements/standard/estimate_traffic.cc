@@ -283,24 +283,24 @@ EstimateTraffic::run_task(Task *)
 	    uint32_t dst_addr = ntohl(info.dst.s_addr);
 
 	    uint8_t net_type = (src_addr >> 16) & 0xFF;
-	    if (net_type > 2) {
-		fprintf(stderr, "bad net type %u... exiting\n", net_type);
-		exit(EXIT_FAILURE);
-	    }
-	    if (net_type == 2 || net_type == 0)
+	    if (net_type != 1) {
+		fprintf(stderr, "bad net type %u...\n", net_type);
 		continue;
-
-	    uint8_t src = ((src_addr >> 8) & 0xFF) - 1;
-	    if (src > _num_hosts) {
-		fprintf(stderr, "bad src addr %u... exiting\n", src_addr);
-		exit(EXIT_FAILURE);
 	    }
 
-	    uint8_t dst = ((dst_addr >> 8) & 0xFF) - 1;
-	    if (dst > _num_hosts) {
-		fprintf(stderr, "bad dst addr %u... exiting\n", dst_addr);
-		exit(EXIT_FAILURE);
+	    uint8_t src = ((src_addr >> 8) & 0xFF);
+	    if (src == 0 || src > _num_hosts) {
+		fprintf(stderr, "bad src addr %u...\n", src_addr);
+		continue;
 	    }
+	    src--;
+
+	    uint8_t dst = ((dst_addr >> 8) & 0xFF);
+	    if (dst == 0 || dst > _num_hosts) {
+		fprintf(stderr, "bad dst addr %u...\n", dst_addr);
+		continue;
+	    }
+	    dst--;
 
 	    long long seen_size = _queues[src * _num_hosts + dst]->get_seen_adu(info);
 
