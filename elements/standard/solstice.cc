@@ -63,6 +63,8 @@ Solstice::configure(Vector<String> &conf, ErrorHandler *errh)
     _print = 0;
     _print2 = 0;
 
+    use_adus = false;
+
     enabled = true;
 
     return 0;
@@ -139,7 +141,7 @@ Solstice::run_task(Task *)
 		    big_demand = true;
 	    }
 	}
-	if (big_demand) {
+	if (big_demand || use_adus) {
 	    for (int src = 0; src < _num_hosts; src++) {
 		for (int dst = 0; dst < _num_hosts; dst++) {
 		    if (sols_mat_get(&_s.future, src, dst) < 1000000) {

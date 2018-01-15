@@ -35,6 +35,7 @@ class Solstice : public Element {
     bool run_task(Task *);
 
     bool enabled;
+    bool use_adus;
 
   private:
     static int set_enabled(const String&, Element*, void*, ErrorHandler*) CLICK_COLD;

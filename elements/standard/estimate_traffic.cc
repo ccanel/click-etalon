@@ -159,6 +159,8 @@ EstimateTraffic::initialize(ErrorHandler *errh)
         }
     }
 
+    _solstice = (Solstice *)router()->find("sol");
+
     _queue_enqueue_bytes = (HandlerCall **)malloc(sizeof(HandlerCall *) *
                                                   _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
@@ -390,6 +392,7 @@ EstimateTraffic::set_source(const String &str, Element *e, void *, ErrorHandler 
 {
     EstimateTraffic *et = static_cast<EstimateTraffic *>(e);
     et->source = String(str);
+    et->_solstice->use_adus = (et->source == "ADU");
     return 0;
 }
 

@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <unordered_map>
 #include "fullnotelockqueue.hh"
+#include "solstice.hh"
 CLICK_DECLS
 
 /*
@@ -61,6 +62,7 @@ class EstimateTraffic : public Element {
     HandlerCall **_queue_bytes;
 
     FullNoteLockQueue **_queues;
+    Solstice *_solstice;
 
     pthread_mutex_t _lock;
     pthread_mutex_t _adu_lock;
