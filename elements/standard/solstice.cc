@@ -122,12 +122,12 @@ Solstice::run_task(Task *)
             atoll(tm.substring(start).c_str());
 
         /* setup the demand here */
-        uint64_t cap = _s.week_len * (_s.link_bw + _s.pack_bw);
+        // uint64_t cap = _s.week_len * (_s.link_bw + _s.pack_bw);
         for (int src = 0; src < _num_hosts; src++) {
             for (int dst = 0; dst < _num_hosts; dst++) {
                 uint64_t v = _traffic_matrix[src * _num_hosts + dst];
-                if (v > cap)
-                    v = cap;
+                // if (v > cap)
+                //     v = cap;
                 sols_mat_set(&_s.future, src, dst, v);
             }
         }
