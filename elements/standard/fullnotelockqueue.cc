@@ -113,9 +113,21 @@ FullNoteLockQueue::pull(int)
 		if (seen_seq.find(t) == seen_seq.end() ||
 		    (now - seen_seq[t]).doubleval() > 1.0) {
 		    // seq not found or seq seen before but not for a second
-		    dequeue_bytes_no_headers += tplen;
+		    traffic_info info;
+		    info.src = src_ip;
+		    info.dst = dst_ip;
+		    info.proto = ipp->ip_p;
+		    info.sport = sport;
+		    info.dport = dport;
+		    info.size = 0;
+		    if (seen_adu.find(info) == seen_adu.end()) {
+			seen_adu[info] = tplen;
+		    } else {
+			seen_adu[info] += tplen;
+		    }
 		    seen_seq[t].assign_now();
 		}
+
 	    }
         }
 	pthread_mutex_unlock(&_lock);
@@ -157,11 +169,15 @@ FullNoteLockQueue::read_dequeue_bytes(Element *e, void *)
     return String(fq->dequeue_bytes);
 }
 
-String
-FullNoteLockQueue::read_dequeue_bytes_no_headers(Element *e, void *)
+long long
+FullNoteLockQueue::get_seen_adu(struct traffic_info info)
 {
-    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    return String(fq->dequeue_bytes_no_headers);
+    pthread_mutex_lock(&_lock);
+    long long size = 0;
+    if (seen_adu.find(info) != seen_adu.end())
+	size = seen_adu[info];
+    pthread_mutex_unlock(&_lock);
+    return size;
 }
 
 String
@@ -201,7 +217,8 @@ FullNoteLockQueue::clear(const String &, Element *e, void *,
     pthread_mutex_lock(&(fq->_lock));
     fq->enqueue_bytes = 0;
     fq->dequeue_bytes = 0;
-    fq->dequeue_bytes_no_headers = 0;
+    fq->seen_adu = std::unordered_map<const struct traffic_info, long long,
+				      info_key_hash, info_key_equal>();
     pthread_mutex_unlock(&(fq->_lock));
     return 0;
 }
@@ -222,7 +239,6 @@ FullNoteLockQueue::add_handlers()
     NotifierQueue::add_handlers();
     add_read_handler("enqueue_bytes", read_enqueue_bytes, 0);
     add_read_handler("dequeue_bytes", read_dequeue_bytes, 0);
-    add_read_handler("dequeue_bytes_no_headers", read_dequeue_bytes_no_headers, 0);
     add_read_handler("bytes", read_bytes, 0);
     add_write_handler("resize_capacity", resize_capacity, 0);
     add_read_handler("resize_capacity", get_resize_capacity, 0);

@@ -39,15 +39,10 @@
 
 CLICK_DECLS
 
-struct traffic_info {
-    char src[INET_ADDRSTRLEN];
-    char dst[INET_ADDRSTRLEN];
-    size_t size;
-};
-
 EstimateTraffic::EstimateTraffic() : _task(this)
 {
     pthread_mutex_init(&_lock, NULL);
+    pthread_mutex_init(&_adu_lock, NULL);
 }
 
 int
@@ -63,19 +58,13 @@ EstimateTraffic::configure(Vector<String> &conf, ErrorHandler *errh)
         return -1;
     _traffic_matrix = (long long *)malloc(sizeof(long long) *
                                           _num_hosts * _num_hosts);
-    _adu_enqueue_matrix = (long long *)malloc(sizeof(long long) *
-                                              _num_hosts * _num_hosts);
     _enqueue_matrix = (long long *)malloc(sizeof(long long) *
                                           _num_hosts * _num_hosts);
-    _adu_dequeue_matrix = (long long *)malloc(sizeof(long long) *
-                                              _num_hosts * _num_hosts);
     _dequeue_matrix = (long long *)malloc(sizeof(long long) *
                                           _num_hosts * _num_hosts);
 
     bzero(_traffic_matrix, sizeof(long long) * _num_hosts * _num_hosts);
-    bzero(_adu_enqueue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
     bzero(_enqueue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
-    bzero(_adu_dequeue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
     bzero(_dequeue_matrix, sizeof(long long) * _num_hosts * _num_hosts);
 
     _print = 0;
@@ -157,18 +146,16 @@ EstimateTraffic::initialize(ErrorHandler *errh)
         }
     }
 
-    _queue_dequeue_bytes_no_headers = (HandlerCall **)malloc(sizeof(HandlerCall *)
-                                                             * _num_hosts
-                                                             * _num_hosts);
+    _queues = (FullNoteLockQueue **)malloc(sizeof(FullNoteLockQueue *) * _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
-            sprintf(handler, "hybrid_switch/q%d%d/q.dequeue_bytes_no_headers",
-                    src+1, dst+1);
-            _queue_dequeue_bytes_no_headers[src * _num_hosts + dst] =
-                new HandlerCall(handler);
-            _queue_dequeue_bytes_no_headers[src * _num_hosts + dst]->
-                initialize(HandlerCall::f_read, this, errh);
+            sprintf(handler, "hybrid_switch/q%d%d/q", src+1, dst+1);
+	    _queues[src * _num_hosts + dst] = (FullNoteLockQueue *)router()->find(handler);
+	    if (!_queues[src * _num_hosts + dst]) {
+		printf("failed to find queue %d %d in router. exiting...\n", src, dst);
+		exit(EXIT_FAILURE);
+	    }
         }
     }
 
@@ -259,66 +246,16 @@ EstimateTraffic::run_task(Task *)
                             exit(EXIT_FAILURE);
                         }
 
-                        int dot_count = 0;
-                        int pos;
-                        for(pos = 0; pos < INET_ADDRSTRLEN; pos++) {
-                            if (info.src[pos] == '.') {
-                                dot_count++;
-                                if (dot_count == 1) {
-                                    pos++;
-                                    break;
-                                }
-                            }
-                        }
-                        int net_type = atoi(&info.src[pos]);
-                        if (net_type > 2) {
-                            fprintf(stderr, "bad net type... exiting\n");
-                            exit(EXIT_FAILURE);
-                        }
-			if (net_type == 2)
-			    continue;
-
-			dot_count = 0;
-                        for(pos = 0; pos < INET_ADDRSTRLEN; pos++) {
-                            if (info.src[pos] == '.') {
-                                dot_count++;
-                                if (dot_count == 2) {
-                                    pos++;
-                                    break;
-                                }
-                            }
-                        }
-                        int src = atoi(&info.src[pos]) - 1;
-			// if (src == 9)
-			//     src = 0;
-                        if (src > _num_hosts) {
-                            fprintf(stderr, "bad src addr... exiting\n");
-                            exit(EXIT_FAILURE);
-                        }
-
-                        dot_count = 0;
-                        for(pos = 0; pos < INET_ADDRSTRLEN; pos++) {
-                            if (info.dst[pos] == '.') {
-                                dot_count++;
-                                if (dot_count == 2) {
-                                    pos++;
-                                    break;
-                                }
-                            }
-                        }
-                        int dst = atoi(&info.dst[pos]) - 1;
-			// if (dst == 9) {
-			//     dst = 1;
-			// }
-                        if (dst > _num_hosts) { // some traffic to switch
-                            fprintf(stderr, "bad dst addr... exiting\n");
-                            exit(EXIT_FAILURE);
-                        }
-
-			if (net_type == 1 && src != dst) {
-			    // printf("src = %d dst = %d\n", src, dst);
-			    _adu_enqueue_matrix[src * _num_hosts + dst] += info.size;
+			pthread_mutex_lock(&_adu_lock);
+			if (expected_adu.find(info) == expected_adu.end() && info.size != -1) { // new flow
+			    expected_adu[info] = info.size;
+			} else {
+			    if (info.size == -1) // terminating
+				expected_adu[info] = 0;
+			    else
+				expected_adu[info] += info.size;
 			}
+			pthread_mutex_unlock(&_adu_lock);
                     }
                 }
             }
@@ -331,13 +268,46 @@ EstimateTraffic::run_task(Task *)
                                            call_read().c_str());
                 _dequeue_matrix[i] = atoll(_queue_dequeue_bytes[i]->
                                            call_read().c_str());
-                _adu_dequeue_matrix[i] = atoll(_queue_dequeue_bytes_no_headers[i]->
-                                               call_read().c_str());
-                _traffic_matrix[i] = _adu_enqueue_matrix[i] - _adu_dequeue_matrix[i];
-                if (_traffic_matrix[i] < 0)
-                    _traffic_matrix[i] = 0;
             }
         }
+
+	bzero(_traffic_matrix, sizeof(long long) * _num_hosts * _num_hosts);
+	pthread_mutex_lock(&_adu_lock);
+	for(auto it = expected_adu.begin(); it != expected_adu.end(); ++it) {
+	    struct traffic_info info = it->first;
+	    long long expected_size = it->second;
+
+	    uint32_t src_addr = ntohl(info.src.s_addr);
+	    uint32_t dst_addr = ntohl(info.dst.s_addr);
+
+	    uint8_t net_type = (src_addr >> 16) & 0xFF;
+	    if (net_type > 2) {
+		fprintf(stderr, "bad net type %u... exiting\n", net_type);
+		exit(EXIT_FAILURE);
+	    }
+	    if (net_type == 2 || net_type == 0)
+		continue;
+
+	    uint8_t src = ((src_addr >> 8) & 0xFF) - 1;
+	    if (src > _num_hosts) {
+		fprintf(stderr, "bad src addr %u... exiting\n", src_addr);
+		exit(EXIT_FAILURE);
+	    }
+
+	    uint8_t dst = ((dst_addr >> 8) & 0xFF) - 1;
+	    if (dst > _num_hosts) {
+		fprintf(stderr, "bad dst addr %u... exiting\n", dst_addr);
+		exit(EXIT_FAILURE);
+	    }
+
+	    long long seen_size = _queues[src * _num_hosts + dst]->get_seen_adu(info);
+
+	    if (src != dst) {
+		if (expected_size > seen_size)
+		    _traffic_matrix[src * _num_hosts + dst] += (expected_size - seen_size);
+	    }
+	}
+	pthread_mutex_unlock(&_adu_lock);
 
         if (source != "ADU") {
             for (int src = 0; src < _num_hosts; src++) {
@@ -367,40 +337,40 @@ EstimateTraffic::run_task(Task *)
 
         _print = (_print + 1) % 100000;
 
-        if (_print == 0) {
-            // printf("tm on et side = %s\n", output_traffic_matrix.c_str());
-            int psrc = 0;
-            int pdst = 1;
-            int i = psrc * _num_hosts + pdst;
-            char handler[500];
-            printf("\n");
-            sprintf(handler, "hybrid_switch/q%d%d/q.length", psrc+1, pdst+1);
-            int len = atoi(HandlerCall::call_read(handler,
-                                                  this).c_str());
-            sprintf(handler, "hybrid_switch/ps/q%d%d.length", psrc+1, pdst+1);
-            int pslen = atoi(HandlerCall::call_read(handler,
-                                                    this).c_str());
-            printf("%s: (1, 2)\tae = %lld, ad = %lld, e = %lld, d = %lld, "
-                   "tm = %lld, len = %d, pslen= %d\n",
-                   source.c_str(), _adu_enqueue_matrix[i], _adu_dequeue_matrix[i],
-                   _enqueue_matrix[i], _dequeue_matrix[i],
-                   _traffic_matrix[i], len, pslen);
+        // if (_print == 0) {
+        //     // printf("tm on et side = %s\n", output_traffic_matrix.c_str());
+        //     int psrc = 0;
+        //     int pdst = 1;
+        //     int i = psrc * _num_hosts + pdst;
+        //     char handler[500];
+        //     printf("\n");
+        //     sprintf(handler, "hybrid_switch/q%d%d/q.length", psrc+1, pdst+1);
+        //     int len = atoi(HandlerCall::call_read(handler,
+        //                                           this).c_str());
+        //     sprintf(handler, "hybrid_switch/ps/q%d%d.length", psrc+1, pdst+1);
+        //     int pslen = atoi(HandlerCall::call_read(handler,
+        //                                             this).c_str());
+        //     printf("%s: (1, 2)\tae = %lld, ad = %lld, e = %lld, d = %lld, "
+        //            "tm = %lld, len = %d, pslen= %d\n",
+        //            source.c_str(), _adu_enqueue_matrix[i], _adu_dequeue_matrix[i],
+        //            _enqueue_matrix[i], _dequeue_matrix[i],
+        //            _traffic_matrix[i], len, pslen);
 
-            psrc = 2;
-            pdst = 1;
-            i = psrc * _num_hosts + pdst;
-            sprintf(handler, "hybrid_switch/q%d%d/q.length", psrc+1, pdst+1);
-            len = atoi(HandlerCall::call_read(handler,
-                                              this).c_str());
-            sprintf(handler, "hybrid_switch/ps/q%d%d.length", psrc+1, pdst+1);
-            pslen = atoi(HandlerCall::call_read(handler,
-                                                this).c_str());
-            printf("%s: (3, 2)\tae = %lld, ad = %lld, e = %lld, d = %lld, "
-                   "tm = %lld, len = %d, pslen= %d\n",
-                   source.c_str(), _adu_enqueue_matrix[i], _adu_dequeue_matrix[i],
-                   _enqueue_matrix[i], _dequeue_matrix[i],
-                   _traffic_matrix[i], len, pslen);
-        }
+        //     psrc = 2;
+        //     pdst = 1;
+        //     i = psrc * _num_hosts + pdst;
+        //     sprintf(handler, "hybrid_switch/q%d%d/q.length", psrc+1, pdst+1);
+        //     len = atoi(HandlerCall::call_read(handler,
+        //                                       this).c_str());
+        //     sprintf(handler, "hybrid_switch/ps/q%d%d.length", psrc+1, pdst+1);
+        //     pslen = atoi(HandlerCall::call_read(handler,
+        //                                         this).c_str());
+        //     printf("%s: (3, 2)\tae = %lld, ad = %lld, e = %lld, d = %lld, "
+        //            "tm = %lld, len = %d, pslen= %d\n",
+        //            source.c_str(), _adu_enqueue_matrix[i], _adu_dequeue_matrix[i],
+        //            _enqueue_matrix[i], _dequeue_matrix[i],
+        //            _traffic_matrix[i], len, pslen);
+        // }
     }
     return true;
 }
@@ -429,9 +399,11 @@ EstimateTraffic::clear(const String &, Element *e, void *, ErrorHandler *)
     EstimateTraffic *et = static_cast<EstimateTraffic *>(e);
     int num_hosts = et->_num_hosts;
     bzero(et->_traffic_matrix, sizeof(long long) * num_hosts * num_hosts);
-    bzero(et->_adu_enqueue_matrix, sizeof(long long) * num_hosts * num_hosts);
+    pthread_mutex_lock(&(et->_adu_lock));
+    et->expected_adu = std::unordered_map<const struct traffic_info, long long,
+					  info_key_hash, info_key_equal>();
+    pthread_mutex_unlock(&(et->_adu_lock));
     bzero(et->_enqueue_matrix, sizeof(long long) * num_hosts * num_hosts);
-    bzero(et->_adu_dequeue_matrix, sizeof(long long) * num_hosts * num_hosts);
     bzero(et->_dequeue_matrix, sizeof(long long) * num_hosts * num_hosts);
     return 0;
 }

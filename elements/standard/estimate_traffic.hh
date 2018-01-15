@@ -4,6 +4,8 @@
 #include <click/element.hh>
 #include <click/timer.hh>
 #include <pthread.h>
+#include <unordered_map>
+#include "fullnotelockqueue.hh"
 CLICK_DECLS
 
 /*
@@ -48,20 +50,21 @@ class EstimateTraffic : public Element {
 
     int _num_hosts;
 
-    long long *_adu_enqueue_matrix;
     long long *_enqueue_matrix;
-    long long *_adu_dequeue_matrix;
     long long *_dequeue_matrix;
     long long *_traffic_matrix;
     Task _task;
     int _print;
 
     HandlerCall **_queue_dequeue_bytes;
-    HandlerCall **_queue_dequeue_bytes_no_headers;
     HandlerCall **_queue_enqueue_bytes;
     HandlerCall **_queue_bytes;
 
+    FullNoteLockQueue **_queues;
+
     pthread_mutex_t _lock;
+    pthread_mutex_t _adu_lock;
+    std::unordered_map<const struct traffic_info, long long, info_key_hash, info_key_equal> expected_adu;
 };
 
 CLICK_ENDDECLS

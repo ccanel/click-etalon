@@ -68,9 +68,40 @@ When written, drops all packets in the queue.
 =a ThreadSafeQueue, QuickNoteQueue, SimpleQueue, NotifierQueue, MixedQueue,
 FrontDropQueue */
 
+struct traffic_info {
+    struct in_addr src;
+    struct in_addr dst;
+    uint8_t proto;
+    uint16_t sport;
+    uint16_t dport;
+    long size;
+};
+
+struct info_key_hash : public std::unary_function<struct traffic_info, std::size_t>
+{
+    std::size_t operator()(const traffic_info& k) const
+    {
+	return k.src.s_addr ^ k.dst.s_addr ^ k.proto ^ k.sport ^ k.dport;
+    }
+};
+
+struct info_key_equal : public std::binary_function<struct traffic_info, struct traffic_info, bool>
+{
+    bool operator()(const struct traffic_info& v0, const struct traffic_info& v1) const
+    {
+	return (
+		v0.src.s_addr == v1.src.s_addr &&
+		v0.dst.s_addr == v1.dst.s_addr &&
+		v0.proto == v1.proto &&
+		v0.sport == v1.sport &&
+		v0.dport == v1.dport
+		);
+    }
+};
+
 typedef std::tuple<struct in_addr, struct in_addr, uint16_t, uint16_t, uint32_t> tcp_and_seq;
 
-struct key_hash : public std::unary_function<tcp_and_seq, std::size_t>
+struct seq_key_hash : public std::unary_function<tcp_and_seq, std::size_t>
 {
     std::size_t operator()(const tcp_and_seq& k) const
     {
@@ -83,7 +114,7 @@ struct key_hash : public std::unary_function<tcp_and_seq, std::size_t>
     }
 };
 
-struct key_equal : public std::binary_function<tcp_and_seq, tcp_and_seq, bool>
+struct seq_key_equal : public std::binary_function<tcp_and_seq, tcp_and_seq, bool>
 {
     bool operator()(const tcp_and_seq& v0, const tcp_and_seq& v1) const
     {
@@ -113,6 +144,8 @@ class FullNoteLockQueue : public NotifierQueue { public:
     void push(int port, Packet *p);
     Packet *pull(int port);
 
+    long long get_seen_adu(struct traffic_info);
+
   protected:
 
     unsigned long long enqueue_bytes;
@@ -133,13 +166,13 @@ class FullNoteLockQueue : public NotifierQueue { public:
 #endif
     static String read_enqueue_bytes(Element *e, void *user_data);
     static String read_dequeue_bytes(Element *e, void *user_data);
-    static String read_dequeue_bytes_no_headers(Element *e, void *user_data);
     static String read_bytes(Element *e, void *user_data);
     static int resize_capacity(const String&, Element*, void*, ErrorHandler*);
     static String get_resize_capacity(Element *e, void *user_data);
     static int clear(const String&, Element*, void*, ErrorHandler*);
 
-    std::unordered_map<const tcp_and_seq, Timestamp, key_hash, key_equal> seen_seq;
+    std::unordered_map<const tcp_and_seq, Timestamp, seq_key_hash, seq_key_equal> seen_seq;
+    std::unordered_map<const struct traffic_info, long long, info_key_hash, info_key_equal> seen_adu;
 
     pthread_mutex_t _lock;
 };
