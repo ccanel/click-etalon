@@ -55,6 +55,9 @@ ECEMark::initialize(ErrorHandler*)
 Packet *
 ECEMark::simple_action(Packet *p)
 {
+    if (p->ip_header()->ip_p != IP_PROTO_TCP)
+	return p;
+
     int src = p->anno_u8(20);
     int dst = p->anno_u8(21);
 
@@ -63,9 +66,7 @@ ECEMark::simple_action(Packet *p)
 
     if (have_circuit) {
         if (WritablePacket *q = p->uniqueify()) {
-            if (q->ip_header()->ip_p == IP_PROTO_TCP) { // TCP
-                q->tcp_header()->th_flags |= TH_ECE;
-            }
+	    q->tcp_header()->th_flags |= TH_ECE;
             p = q;
         }
     }
