@@ -22,8 +22,6 @@
 #include <click/packet_anno.hh>
 #include <click/args.hh>
 #include <pthread.h>
-#include <clicknet/ip.h>
-#include <clicknet/tcp.h>
 CLICK_DECLS
 
 HSLog::HSLog()
