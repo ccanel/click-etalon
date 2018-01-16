@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <tuple>
 #include <clicknet/tcp.h>
+#include <clicknet/udp.h>
 
 CLICK_DECLS
 
@@ -90,27 +91,34 @@ FullNoteLockQueue::pull(int)
 
         if (p->has_transport_header()) {
             const click_ip *ipp = p->ip_header();
+	    struct in_addr src_ip = ipp->ip_src;
+	    struct in_addr dst_ip = ipp->ip_dst;
 	    unsigned int tplen = p->length() - (ipp->ip_hl * 4);
+	    uint16_t sport = 0;
+	    uint16_t dport = 0;
+	    uint32_t seq = 0;
+	    bool not_tcp = true;
             if (ipp->ip_p == IP_PROTO_TCP) { // TCP
                 tplen -= p->tcp_header()->th_off * 4;
+		sport = p->tcp_header()->th_sport;
+		dport = p->tcp_header()->th_dport;
+		seq = (uint32_t)p->tcp_header()->th_seq;
+		not_tcp = false;
             }
             else if (ipp->ip_p == IP_PROTO_UDP) { // UDP
                 tplen -= 8;
+		sport = p->udp_header()->uh_sport;
+		dport = p->udp_header()->uh_dport;
             }
 	    if (p->length() < tplen) {
 		printf("error: data segment larger than packet?\n");
 		exit(EXIT_FAILURE);
 	    }
 	    if (tplen) { // data packet
-		struct in_addr src_ip = ipp->ip_src;
-		struct in_addr dst_ip = ipp->ip_dst;
-		uint16_t sport = p->tcp_header()->th_sport;
-		uint16_t dport = p->tcp_header()->th_dport;
-		uint32_t seq = (uint32_t)p->tcp_header()->th_seq;
 		tcp_and_seq t = std::make_tuple(src_ip, dst_ip, sport, dport, seq);
 		Timestamp now;
 		now.assign_now();
-		if (seen_seq.find(t) == seen_seq.end() ||
+		if (not_tcp || seen_seq.find(t) == seen_seq.end() ||
 		    (now - seen_seq[t]).doubleval() > 1.0) {
 		    // seq not found or seq seen before but not for a second
 		    traffic_info info;
