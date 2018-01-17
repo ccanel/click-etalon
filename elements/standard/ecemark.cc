@@ -66,8 +66,16 @@ ECEMark::simple_action(Packet *p)
 
     if (have_circuit) {
         if (WritablePacket *q = p->uniqueify()) {
-	    q->tcp_header()->th_flags |= TH_ECE;
-            p = q;
+	    click_tcp *tcph = q->tcp_header();
+	    tcph->th_flags |= TH_ECE;
+
+	    // new_sum = ~(~old_sum + ~old_halfword + new_halfword)
+	    //         = ~(~old_sum + ~old_halfword + old_halfword + 0x0040)
+	    //         = ~(~old_sum + ~0 + 0x0040)
+	    //         = ~(~old_sum + 0x0040)
+	    unsigned long sum = (~ntohs(tcph->th_sum) & 0xFFFF) + 0x0040;
+	    tcph->th_sum = ~htons(sum + (sum >> 16));
+	    return q;
         }
     }
     return p;
