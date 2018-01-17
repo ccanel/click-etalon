@@ -6,7 +6,7 @@
 #include <click/timer.hh>
 #include <click/notifier.hh>
 #include <click/standard/storage.hh>
-#include <pthread.h>
+#include <atomic>
 CLICK_DECLS
 
 /*
@@ -86,9 +86,7 @@ class LinkUnqueue : public Element, public Storage { public:
     NotifierSignal _signal;
     NotifierSignal _can_push_signal;
 
-    long long _total_bytes;
-
-    pthread_mutex_t _lock;
+    std::atomic<long long> _total_bytes;
 
     static int clear(const String&, Element*, void*, ErrorHandler*);
     static String get_total_bytes(Element *e, void *user_data);

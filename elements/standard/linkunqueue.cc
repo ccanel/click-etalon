@@ -27,13 +27,11 @@
 #include "linkunqueue.hh"
 #include <click/standard/scheduleinfo.hh>
 #include <click/packet_anno.hh>
-#include <pthread.h>
 CLICK_DECLS
 
 LinkUnqueue::LinkUnqueue()
     : _qhead(0), _qtail(0), _task(this), _timer(&_task), _total_bytes(0)
 {
-    pthread_mutex_init(&_lock, NULL);
 }
 
 void *
@@ -152,9 +150,7 @@ LinkUnqueue::run_task(Task *)
 	//click_chatter("%p{timestamp}: RELEASE %p{timestamp}", &now, &p->timestamp_anno());
 	int packet_size = p->length();
 	output(0).push(p);
-	pthread_mutex_lock(&_lock);
 	_total_bytes += packet_size;
-	pthread_mutex_unlock(&_lock);
 	Storage::set_tail(Storage::tail() - 1);
 	worked = true;
     }
@@ -252,9 +248,7 @@ LinkUnqueue::clear(const String &, Element *e, void *,
 		   ErrorHandler *)
 {
     LinkUnqueue *lu = static_cast<LinkUnqueue *>(e);
-    pthread_mutex_lock(&(lu->_lock));
     lu->_total_bytes = 0;
-    pthread_mutex_unlock(&(lu->_lock));
     return 0;
 }
 
@@ -262,9 +256,7 @@ String
 LinkUnqueue::get_total_bytes(Element *e, void *)
 {
     LinkUnqueue *lu = static_cast<LinkUnqueue *>(e);
-    pthread_mutex_lock(&(lu->_lock));
     long long bytes = lu->_total_bytes;
-    pthread_mutex_unlock(&(lu->_lock));
     return String(bytes);
 }
 
