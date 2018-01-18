@@ -137,7 +137,6 @@ class FullNoteLockQueue : public NotifierQueue { public:
 
     int configure(Vector<String> &conf, ErrorHandler *) CLICK_COLD;
     int live_reconfigure(Vector<String> &conf, ErrorHandler *errh);
-    void take_state(Element*, ErrorHandler*);
     //#if CLICK_DEBUG_SCHEDULING
     void add_handlers() CLICK_COLD;
     //#endif
@@ -172,8 +171,6 @@ class FullNoteLockQueue : public NotifierQueue { public:
     std::unordered_map<const struct traffic_info, long long, info_key_hash, info_key_equal> seen_adu;
 
 private:
-    atomic_uint32_t _xhead;
-    atomic_uint32_t _xtail;
     atomic_uint32_t _xadu_access;
 };
 

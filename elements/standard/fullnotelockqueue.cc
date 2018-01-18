@@ -26,7 +26,6 @@ CLICK_DECLS
 
 FullNoteLockQueue::FullNoteLockQueue()
 {
-    _xhead = _xtail = 0;
     _xadu_access = 0;
     use_adus = false;
 }
@@ -56,40 +55,18 @@ FullNoteLockQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
     int r = NotifierQueue::live_reconfigure(conf, errh);
     if (r >= 0 && size() < capacity() && _q)
 	_full_note.wake();
-    _xhead = head();
-    _xtail = tail();
     return r;
-}
-
-void
-FullNoteLockQueue::take_state(Element *e, ErrorHandler *errh)
-{
-    SimpleQueue *q = (SimpleQueue *)e->cast("SimpleQueue");
-    if (!q)
-        return;
-
-    SimpleQueue::take_state(e, errh);
-    _xhead = head();
-    _xtail = tail();
 }
 
 void
 FullNoteLockQueue::push(int, Packet *p)
 {
-    // Reserve a slot by incrementing _xtail
-    Storage::index_type t, nt;
-    do {
-	t = tail();
-	nt = next_i(t);
-    } while (_xtail.compare_swap(t, nt) != t);
-    // Other pushers spin until _tail := nt (or _xtail := t)
-
-    Storage::index_type h = head();
+    Storage::index_type h = head(), t = tail(), nt = next_i(t);
     if (nt != h) {
 	push_success(h, t, nt, p);
+	_byte_count += p->length();
     }
     else {
-	_xtail = t;
 	push_failure(p);
     }
 }
@@ -97,17 +74,11 @@ FullNoteLockQueue::push(int, Packet *p)
 Packet *
 FullNoteLockQueue::pull(int)
 {
-    // Reserve a slot by incrementing _xhead
-    Storage::index_type h, nh;
-    do {
-	h = head();
-	nh = next_i(h);
-    } while (_xhead.compare_swap(h, nh) != h);
-    // Other pullers spin until _head := nh (or _xhead := h)
+    Storage::index_type h = head(), t = tail(), nh = next_i(h);
 
-    Storage::index_type t = tail();
-    if (t != h) {
+    if (h != t) {
         Packet *p = pull_success(h, nh);
+	_byte_count -= p->length();
 
         if (use_adus && p->has_transport_header()) {
             const click_ip *ipp = p->ip_header();
@@ -163,7 +134,6 @@ FullNoteLockQueue::pull(int)
         return p;
     }
     else {
-	_xhead = h;
         return pull_failure();
     }
 }
@@ -200,24 +170,7 @@ FullNoteLockQueue::get_seen_adu(struct traffic_info info)
 long long
 FullNoteLockQueue::get_bytes()
 {
-    Storage::index_type h, nh;
-    do {
-	h = head();
-	nh = next_i(h);
-    } while (_xhead.compare_swap(h, nh) != h);
-    Storage::index_type t, nt;
-    do {
-	t = tail();
-	nt = next_i(t);
-    } while (_xtail.compare_swap(t, nt) != t);
-    long long byte_count = 0;
-    while (h != t) {
-        byte_count += _q[h]->length();
-        h = next_i(h);
-    }
-    _xtail = t;
-    _xhead = h;
-    return byte_count;
+    return _byte_count;
 }
 
 int
@@ -225,21 +178,9 @@ FullNoteLockQueue::resize_capacity(const String &str, Element *e, void *,
 				   ErrorHandler *errh)
 {
     FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    Storage::index_type t, nt;
-    do {
-	t = fq->tail();
-	nt = fq->next_i(t);
-    } while (fq->_xtail.compare_swap(t, nt) != t);
-    Storage::index_type h, nh;
-    do {
-	h = fq->head();
-	nh = fq->next_i(h);
-    } while (fq->_xhead.compare_swap(h, nh) != h);
     Vector<String> conf;
     conf.push_back("CAPACITY " + str);
     fq->live_reconfigure(conf, errh);
-    fq->_xtail = t;
-    fq->_xhead = h;
     return 0;
 }
 

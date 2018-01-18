@@ -3,6 +3,7 @@
 #define CLICK_SIMPLEQUEUE_HH
 #include <click/element.hh>
 #include <click/standard/storage.hh>
+#include <atomic>
 CLICK_DECLS
 
 /*
@@ -111,6 +112,7 @@ class SimpleQueue : public Element, public Storage { public:
     static String read_handler(Element*, void*) CLICK_COLD;
     static int write_handler(const String&, Element*, void*, ErrorHandler*) CLICK_COLD;
 
+    std::atomic<long long> _byte_count;
 };
 
 

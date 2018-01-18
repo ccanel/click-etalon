@@ -58,6 +58,7 @@ SimpleQueue::initialize(ErrorHandler *errh)
 	return errh->error("out of memory");
     _drops = 0;
     _highwater_length = 0;
+    _byte_count = 0;
     return 0;
 }
 
@@ -81,8 +82,10 @@ SimpleQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
     Storage::index_type i, j;
     for (i = head(), j = 0; i != tail() && j != new_capacity; i = next_i(i))
 	new_q[j++] = _q[i];
-    for (; i != tail(); i = next_i(i))
+    for (; i != tail(); i = next_i(i)) {
+	_byte_count -= _q[i]->length();
 	_q[i]->kill();
+    }
 
     CLICK_LFREE(_q, sizeof(Packet *) * (_capacity + 1));
     _q = new_q;
@@ -118,6 +121,7 @@ SimpleQueue::take_state(Element *e, ErrorHandler *errh)
 	errh->warning("some packets lost (old length %d, new capacity %d)",
 		      q->size(), _capacity);
     while (j != q->tail()) {
+	_byte_count -= _q[j]->length();
 	q->_q[j]->kill();
 	j = q->next_i(j);
     }
