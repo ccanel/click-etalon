@@ -165,10 +165,12 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 		nmemb++;
 	    }
 	}
-	do {
-	} while(hsl->_xfile_access.compare_swap(0, 1) != 0);
-	fwrite(hsl->circuit_event_buffer, sizeof(hsl_s), nmemb, hsl->_fp);
-	hsl->_xfile_access = 0;
+	if (nmemb) {
+	    do {
+	    } while(hsl->_xfile_access.compare_swap(0, 1) != 0);
+	    fwrite(hsl->circuit_event_buffer, sizeof(hsl_s), nmemb, hsl->_fp);
+	    hsl->_xfile_access = 0;
+	}
     }
     return 0;
 }
