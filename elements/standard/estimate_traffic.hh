@@ -51,15 +51,9 @@ class EstimateTraffic : public Element {
 
     int _num_hosts;
 
-    long long *_enqueue_matrix;
-    long long *_dequeue_matrix;
     long long *_traffic_matrix;
     Task _task;
     int _print;
-
-    HandlerCall **_queue_dequeue_bytes;
-    HandlerCall **_queue_enqueue_bytes;
-    HandlerCall **_queue_bytes;
 
     FullNoteLockQueue **_queues;
     Solstice *_solstice;
