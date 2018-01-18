@@ -138,7 +138,6 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 	int hosts = hsl->_num_hosts + 1;
 	Timestamp now;
 	now.assign_now();
-	const char *now_str = now.unparse().c_str();
 	int nmemb = 0;
 	hsl_s *msg;
 	for(int dst = 1; dst < hosts; dst++) {
@@ -146,7 +145,7 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 	    if (src != 0) {
 		msg = &(hsl->circuit_event_buffer[nmemb]);
 		msg->type = 2;
-		strncpy(msg->ts, now_str, 31);
+		strncpy(msg->ts, now.unparse().c_str(), 31);
 		msg->src = src;
 		msg->dst = dst;
 		nmemb++;
@@ -159,7 +158,7 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 	    if (src != 0) {
 		msg = &(hsl->circuit_event_buffer[nmemb]);
 		msg->type = 1;
-		strncpy(msg->ts, now_str, 31);
+		strncpy(msg->ts, now.unparse().c_str(), 31);
 		msg->src = src;
 		msg->dst = dst;
 		nmemb++;
