@@ -26,7 +26,7 @@ CLICK_DECLS
 
 FullNoteLockQueue::FullNoteLockQueue()
 {
-    _xadu_access = 0;
+    _xadu_access = _xhead = 0;
     use_adus = false;
 }
 
@@ -55,7 +55,19 @@ FullNoteLockQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
     int r = NotifierQueue::live_reconfigure(conf, errh);
     if (r >= 0 && size() < capacity() && _q)
 	_full_note.wake();
+    _xhead = head();
     return r;
+}
+
+void
+FullNoteLockQueue::take_state(Element *e, ErrorHandler *errh)
+{
+    SimpleQueue *q = (SimpleQueue *)e->cast("SimpleQueue");
+    if (!q)
+	return;
+
+    SimpleQueue::take_state(e, errh);
+    _xhead = head();
 }
 
 void
@@ -74,9 +86,14 @@ FullNoteLockQueue::push(int, Packet *p)
 Packet *
 FullNoteLockQueue::pull(int)
 {
-    Storage::index_type h = head(), t = tail(), nh = next_i(h);
+    Storage::index_type h, nh;
+    do {
+	h = head();
+	nh = next_i(h);
+    } while (_xhead.compare_swap(h, nh) != h);
 
-    if (h != t) {
+    Storage::index_type t = tail();
+    if (t != h) {
         Packet *p = pull_success(h, nh);
 	_byte_count -= p->length();
 
@@ -109,8 +126,6 @@ FullNoteLockQueue::pull(int)
 		tcp_and_seq t = std::make_tuple(src_ip, dst_ip, sport, dport, seq);
 		Timestamp now;
 		now.assign_now();
-		do {
-		} while (_xadu_access.compare_swap(0, 1) != 0);
 		if (not_tcp || seen_seq.find(t) == seen_seq.end() ||
 		    (now - seen_seq[t]).doubleval() > 1.0) {
 		    // seq not found or seq seen before but not for a second
@@ -121,19 +136,22 @@ FullNoteLockQueue::pull(int)
 		    info.sport = sport;
 		    info.dport = dport;
 		    info.size = 0;
+		    do {
+		    } while (_xadu_access.compare_swap(0, 1) != 0);
 		    if (seen_adu.find(info) == seen_adu.end()) {
 			seen_adu[info] = tplen;
 		    } else {
 			seen_adu[info] += tplen;
 		    }
 		    seen_seq[t].assign_now();
+		    _xadu_access = 0;
 		}
-		_xadu_access = 0;
 	    }
         }
         return p;
     }
     else {
+	_xhead = h;
         return pull_failure();
     }
 }
@@ -158,9 +176,9 @@ FullNoteLockQueue::add_handlers()
 long long
 FullNoteLockQueue::get_seen_adu(struct traffic_info info)
 {
+    long long size = 0;
     do {
     } while (_xadu_access.compare_swap(0, 1) != 0);
-    long long size = 0;
     if (seen_adu.find(info) != seen_adu.end())
 	size = seen_adu[info];
     _xadu_access = 0;
