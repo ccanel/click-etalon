@@ -137,7 +137,6 @@ class FullNoteLockQueue : public NotifierQueue { public:
 
     int configure(Vector<String> &conf, ErrorHandler *) CLICK_COLD;
     int live_reconfigure(Vector<String> &conf, ErrorHandler *errh);
-    void take_state(Element *e, ErrorHandler *errh);
     //#if CLICK_DEBUG_SCHEDULING
     void add_handlers() CLICK_COLD;
     //#endif
@@ -173,7 +172,8 @@ class FullNoteLockQueue : public NotifierQueue { public:
 
 private:
     atomic_uint32_t _xadu_access;
-    atomic_uint32_t _xhead;
+    atomic_uint32_t _xdeq;
+    atomic_uint32_t _xenq;
 };
 
 inline void

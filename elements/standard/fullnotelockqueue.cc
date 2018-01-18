@@ -26,7 +26,7 @@ CLICK_DECLS
 
 FullNoteLockQueue::FullNoteLockQueue()
 {
-    _xadu_access = _xhead = 0;
+    _xadu_access = _xdeq = _xenq = 0;
     use_adus = false;
 }
 
@@ -52,33 +52,32 @@ FullNoteLockQueue::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 FullNoteLockQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
 {
+    do {
+    } while (_xdeq.compare_swap(0, 1) != 0);
+    do {
+    } while (_xenq.compare_swap(0, 1) != 0);
     int r = NotifierQueue::live_reconfigure(conf, errh);
     if (r >= 0 && size() < capacity() && _q)
 	_full_note.wake();
-    _xhead = head();
+    _xenq = 0;
+    _xdeq = 0;
     return r;
-}
-
-void
-FullNoteLockQueue::take_state(Element *e, ErrorHandler *errh)
-{
-    SimpleQueue *q = (SimpleQueue *)e->cast("SimpleQueue");
-    if (!q)
-	return;
-
-    SimpleQueue::take_state(e, errh);
-    _xhead = head();
 }
 
 void
 FullNoteLockQueue::push(int, Packet *p)
 {
+    do {
+    } while (_xenq.compare_swap(0, 1) != 0);
+
     Storage::index_type h = head(), t = tail(), nt = next_i(t);
     if (nt != h) {
 	push_success(h, t, nt, p);
+	_xenq = 0;
 	_byte_count += p->length();
     }
     else {
+	_xenq = 0;
 	push_failure(p);
     }
 }
@@ -86,15 +85,13 @@ FullNoteLockQueue::push(int, Packet *p)
 Packet *
 FullNoteLockQueue::pull(int)
 {
-    Storage::index_type h, nh;
     do {
-	h = head();
-	nh = next_i(h);
-    } while (_xhead.compare_swap(h, nh) != h);
+    } while (_xdeq.compare_swap(0, 1) != 0);
 
-    Storage::index_type t = tail();
-    if (t != h) {
+    Storage::index_type h = head(), t = tail(), nh = next_i(h);
+    if (h != t) {
         Packet *p = pull_success(h, nh);
+	_xdeq = 0;
 	_byte_count -= p->length();
 
         if (use_adus && p->has_transport_header()) {
@@ -151,7 +148,7 @@ FullNoteLockQueue::pull(int)
         return p;
     }
     else {
-	_xhead = h;
+	_xdeq = 0;
         return pull_failure();
     }
 }
