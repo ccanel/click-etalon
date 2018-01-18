@@ -21,13 +21,12 @@
 #include "hslog.hh"
 #include <click/packet_anno.hh>
 #include <click/args.hh>
-#include <pthread.h>
 CLICK_DECLS
 
 HSLog::HSLog()
 {
-    pthread_mutex_init(&lock, NULL);
     _enabled = true;
+    _xfile_access = 0;
 }
 
 int
@@ -44,13 +43,8 @@ HSLog::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-HSLog::initialize(ErrorHandler* errh)
+HSLog::initialize(ErrorHandler*)
 {
-    _q12_len = new HandlerCall("hybrid_switch/q12/q.length");
-    _q12_len->initialize(HandlerCall::f_read, this, errh);
-    _q12_cap = new HandlerCall("hybrid_switch/q12/q.capacity");
-    _q12_cap->initialize(HandlerCall::f_read, this, errh);
-
     current_circuits = (int *)malloc(sizeof(int) * (_num_hosts + 1));
     for (int i = 0; i < _num_hosts + 1; i++) {
         current_circuits[i] = 0;
@@ -90,13 +84,11 @@ HSLog::simple_action(Packet *p)
 	latency /= 20; // TDF
 	msg.latency = (int)latency;
 
-	// int len = atoi(_q12_len->call_read().c_str());
-	// int cap = atoi(_q12_cap->call_read().c_str());
-
-	pthread_mutex_lock(&lock);
 	memcpy(msg.data, p->data(), 64);
+	do {
+	} while(_xfile_access.compare_swap(0, 1) != 0);
 	fwrite(&msg, sizeof(msg), 1, _fp);
-	pthread_mutex_unlock(&lock);
+	_xfile_access = 0;
     }
     return p;
 }
@@ -105,10 +97,11 @@ int
 HSLog::set_log(const String &str, Element *e, void *, ErrorHandler *)
 {
     HSLog *hsl = static_cast<HSLog *>(e);
-    pthread_mutex_lock(&(hsl->lock));
+    do {
+    } while(hsl->_xfile_access.compare_swap(0, 1) != 0);
     hsl->open_log(str.c_str());
+    hsl->_xfile_access = 0;
     hsl->_enabled = true;
-    pthread_mutex_unlock(&(hsl->lock));
     return 0;
 }
 
@@ -145,14 +138,16 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 	Timestamp now;
 	now.assign_now();
 	strcpy(msg.ts, now.unparse().c_str());
-	pthread_mutex_lock(&(hsl->lock));
 	for(int dst = 1; dst < hosts; dst++) {
 	    int src = hsl->current_circuits[dst];
 	    if (src != 0) {
 		msg.type = 2;
 		msg.src = src;
 		msg.dst = dst;
+		do {
+		} while(hsl->_xfile_access.compare_swap(0, 1) != 0);
 		fwrite(&msg, sizeof(msg), 1, hsl->_fp);
+		hsl->_xfile_access = 0;
 	    }
 	}
 	Vector<String> c = HSLog::split(str, '/');
@@ -163,10 +158,12 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 		msg.type = 1;
 		msg.src = src;
 		msg.dst = dst;
+		do {
+		} while(hsl->_xfile_access.compare_swap(0, 1) != 0);
 		fwrite(&msg, sizeof(msg), 1, hsl->_fp);
+		hsl->_xfile_access = 0;
 	    }
 	}
-	pthread_mutex_unlock(&(hsl->lock));
     }
     return 0;
 }

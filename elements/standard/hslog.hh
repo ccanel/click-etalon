@@ -2,7 +2,7 @@
 #ifndef CLICK_HSLOG_HH
 #define CLICK_HSLOG_HH
 #include <click/element.hh>
-#include <pthread.h>
+#include <atomic>
 CLICK_DECLS
 
 /* =c
@@ -37,8 +37,6 @@ class HSLog : public Element { public:
     
     Packet *simple_action(Packet *);
 
-    pthread_mutex_t lock;
-
 private:
     static int set_log(const String&, Element*, void*, ErrorHandler*);
     static int disable_log(const String&, Element*, void*, ErrorHandler*);
@@ -46,10 +44,10 @@ private:
     static Vector<String> split(const String&, char);
     int open_log(const char *);
     FILE *_fp;
-    HandlerCall *_q12_len, *_q12_cap;
     int *current_circuits;
     int _num_hosts;
     bool _enabled;
+    atomic_uint32_t _xfile_access;
 };
 
 CLICK_ENDDECLS
