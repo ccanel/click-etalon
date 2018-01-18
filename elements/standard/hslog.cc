@@ -49,6 +49,9 @@ HSLog::initialize(ErrorHandler*)
     for (int i = 0; i < _num_hosts + 1; i++) {
         current_circuits[i] = 0;
     }
+
+    circuit_event_buffer = (hsl_s *)malloc(sizeof(hsl_s) * _num_hosts * 2);
+    bzero(circuit_event_buffer, sizeof(hsl_s) * _num_hosts * 2);
     
     if (open_log("/tmp/hslog.log"))
     	return 1;
@@ -77,7 +80,7 @@ HSLog::simple_action(Packet *p)
 	bzero(&msg, sizeof(msg));
 	Timestamp now;
 	now.assign_now();
-	strcpy(msg.ts, now.unparse().c_str());
+	strncpy(msg.ts, now.unparse().c_str(), 31);
 	float latency = strtof((now - CONST_FIRST_TIMESTAMP_ANNO(p)).unparse().c_str(),
 			       NULL);
 	latency *= 1e6;
@@ -131,23 +134,22 @@ int
 HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 {
     HSLog *hsl = static_cast<HSLog *>(e);
-    hsl_s msg;
-    bzero(&msg, sizeof(msg));
     if (hsl->_enabled) {
 	int hosts = hsl->_num_hosts + 1;
 	Timestamp now;
 	now.assign_now();
-	strcpy(msg.ts, now.unparse().c_str());
+	const char *now_str = now.unparse().c_str();
+	int nmemb = 0;
+	hsl_s *msg;
 	for(int dst = 1; dst < hosts; dst++) {
 	    int src = hsl->current_circuits[dst];
 	    if (src != 0) {
-		msg.type = 2;
-		msg.src = src;
-		msg.dst = dst;
-		do {
-		} while(hsl->_xfile_access.compare_swap(0, 1) != 0);
-		fwrite(&msg, sizeof(msg), 1, hsl->_fp);
-		hsl->_xfile_access = 0;
+		msg = &(hsl->circuit_event_buffer[nmemb]);
+		msg->type = 2;
+		strncpy(msg->ts, now_str, 31);
+		msg->src = src;
+		msg->dst = dst;
+		nmemb++;
 	    }
 	}
 	Vector<String> c = HSLog::split(str, '/');
@@ -155,15 +157,18 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 	    int src = atoi(c[dst-1].c_str()) + 1;
 	    hsl->current_circuits[dst] = src;
 	    if (src != 0) {
-		msg.type = 1;
-		msg.src = src;
-		msg.dst = dst;
-		do {
-		} while(hsl->_xfile_access.compare_swap(0, 1) != 0);
-		fwrite(&msg, sizeof(msg), 1, hsl->_fp);
-		hsl->_xfile_access = 0;
+		msg = &(hsl->circuit_event_buffer[nmemb]);
+		msg->type = 1;
+		strncpy(msg->ts, now_str, 31);
+		msg->src = src;
+		msg->dst = dst;
+		nmemb++;
 	    }
 	}
+	do {
+	} while(hsl->_xfile_access.compare_swap(0, 1) != 0);
+	fwrite(hsl->circuit_event_buffer, sizeof(hsl_s), nmemb, hsl->_fp);
+	hsl->_xfile_access = 0;
     }
     return 0;
 }
