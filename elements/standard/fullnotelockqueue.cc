@@ -18,7 +18,6 @@
 
 #include <click/config.h>
 #include "fullnotelockqueue.hh"
-#include <pthread.h>
 #include <tuple>
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
@@ -27,10 +26,9 @@ CLICK_DECLS
 
 FullNoteLockQueue::FullNoteLockQueue()
 {
-    pthread_mutex_init(&_lock, NULL);
-    enqueue_bytes = 0;
-    dequeue_bytes = 0;
-    dequeue_bytes_no_headers = 0;
+    _xhead = _xtail = 0;
+    _xadu_access = 0;
+    use_adus = false;
 }
 
 void *
@@ -58,38 +56,60 @@ FullNoteLockQueue::live_reconfigure(Vector<String> &conf, ErrorHandler *errh)
     int r = NotifierQueue::live_reconfigure(conf, errh);
     if (r >= 0 && size() < capacity() && _q)
 	_full_note.wake();
+    _xhead = head();
+    _xtail = tail();
     return r;
+}
+
+void
+FullNoteLockQueue::take_state(Element *e, ErrorHandler *errh)
+{
+    SimpleQueue *q = (SimpleQueue *)e->cast("SimpleQueue");
+    if (!q)
+        return;
+
+    SimpleQueue::take_state(e, errh);
+    _xhead = head();
+    _xtail = tail();
 }
 
 void
 FullNoteLockQueue::push(int, Packet *p)
 {
-    pthread_mutex_lock(&_lock);
-    // Code taken from SimpleQueue::push().
-    Storage::index_type h = head(), t = tail(), nt = next_i(t);
+    // Reserve a slot by incrementing _xtail
+    Storage::index_type t, nt;
+    do {
+	t = tail();
+	nt = next_i(t);
+    } while (_xtail.compare_swap(t, nt) != t);
+    // Other pushers spin until _tail := nt (or _xtail := t)
 
+    Storage::index_type h = head();
     if (nt != h) {
-        push_success(h, t, nt, p);
-        enqueue_bytes += p->length();
+	push_success(h, t, nt, p);
     }
     else {
-        push_failure(p);
+	_xtail = t;
+	push_failure(p);
     }
-    pthread_mutex_unlock(&_lock);
 }
 
 Packet *
 FullNoteLockQueue::pull(int)
 {
-    pthread_mutex_lock(&_lock);
-    // Code taken from SimpleQueue::deq.
-    Storage::index_type h = head(), t = tail(), nh = next_i(h);
+    // Reserve a slot by incrementing _xhead
+    Storage::index_type h, nh;
+    do {
+	h = head();
+	nh = next_i(h);
+    } while (_xhead.compare_swap(h, nh) != h);
+    // Other pullers spin until _head := nh (or _xhead := h)
 
-    if (h != t) {
+    Storage::index_type t = tail();
+    if (t != h) {
         Packet *p = pull_success(h, nh);
-        dequeue_bytes += p->length();
 
-        if (p->has_transport_header()) {
+        if (use_adus && p->has_transport_header()) {
             const click_ip *ipp = p->ip_header();
 	    struct in_addr src_ip = ipp->ip_src;
 	    struct in_addr dst_ip = ipp->ip_dst;
@@ -118,6 +138,8 @@ FullNoteLockQueue::pull(int)
 		tcp_and_seq t = std::make_tuple(src_ip, dst_ip, sport, dport, seq);
 		Timestamp now;
 		now.assign_now();
+		do {
+		} while (_xadu_access.compare_swap(0, 1) != 0);
 		if (not_tcp || seen_seq.find(t) == seen_seq.end() ||
 		    (now - seen_seq[t]).doubleval() > 1.0) {
 		    // seq not found or seq seen before but not for a second
@@ -135,14 +157,13 @@ FullNoteLockQueue::pull(int)
 		    }
 		    seen_seq[t].assign_now();
 		}
-
+		_xadu_access = 0;
 	    }
         }
-	pthread_mutex_unlock(&_lock);
         return p;
     }
     else {
-	pthread_mutex_unlock(&_lock);
+	_xhead = h;
         return pull_failure();
     }
 }
@@ -163,45 +184,40 @@ FullNoteLockQueue::add_handlers()
     add_read_handler("notifier_state", read_handler, 0);
 }
 #else
-String
-FullNoteLockQueue::read_enqueue_bytes(Element *e, void *)
-{
-    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    return String(fq->enqueue_bytes);
-}
-
-String
-FullNoteLockQueue::read_dequeue_bytes(Element *e, void *)
-{
-    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    return String(fq->dequeue_bytes);
-}
 
 long long
 FullNoteLockQueue::get_seen_adu(struct traffic_info info)
 {
-    pthread_mutex_lock(&_lock);
+    do {
+    } while (_xadu_access.compare_swap(0, 1) != 0);
     long long size = 0;
     if (seen_adu.find(info) != seen_adu.end())
 	size = seen_adu[info];
-    pthread_mutex_unlock(&_lock);
+    _xadu_access = 0;
     return size;
 }
 
-String
-FullNoteLockQueue::read_bytes(Element *e, void *)
+long long
+FullNoteLockQueue::get_bytes()
 {
-    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-
-    pthread_mutex_lock(&(fq->_lock));
-    int byte_count = 0;
-    Storage::index_type h = fq->head(), t = fq->tail();
+    Storage::index_type h, nh;
+    do {
+	h = head();
+	nh = next_i(h);
+    } while (_xhead.compare_swap(h, nh) != h);
+    Storage::index_type t, nt;
+    do {
+	t = tail();
+	nt = next_i(t);
+    } while (_xtail.compare_swap(t, nt) != t);
+    long long byte_count = 0;
     while (h != t) {
-        byte_count += fq->_q[h]->length();
-        h = fq->next_i(h);
+        byte_count += _q[h]->length();
+        h = next_i(h);
     }
-    pthread_mutex_unlock(&(fq->_lock));
-    return String(byte_count);
+    _xtail = t;
+    _xhead = h;
+    return byte_count;
 }
 
 int
@@ -209,11 +225,21 @@ FullNoteLockQueue::resize_capacity(const String &str, Element *e, void *,
 				   ErrorHandler *errh)
 {
     FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    pthread_mutex_lock(&(fq->_lock));
+    Storage::index_type t, nt;
+    do {
+	t = fq->tail();
+	nt = fq->next_i(t);
+    } while (fq->_xtail.compare_swap(t, nt) != t);
+    Storage::index_type h, nh;
+    do {
+	h = fq->head();
+	nh = fq->next_i(h);
+    } while (fq->_xhead.compare_swap(h, nh) != h);
     Vector<String> conf;
     conf.push_back("CAPACITY " + str);
     fq->live_reconfigure(conf, errh);
-    pthread_mutex_unlock(&(fq->_lock));
+    fq->_xtail = t;
+    fq->_xhead = h;
     return 0;
 }
 
@@ -222,12 +248,11 @@ FullNoteLockQueue::clear(const String &, Element *e, void *,
 			 ErrorHandler *)
 {
     FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    pthread_mutex_lock(&(fq->_lock));
-    fq->enqueue_bytes = 0;
-    fq->dequeue_bytes = 0;
+    do {
+    } while (fq->_xadu_access.compare_swap(0, 1) != 0);
     fq->seen_adu = std::unordered_map<const struct traffic_info, long long,
 				      info_key_hash, info_key_equal>();
-    pthread_mutex_unlock(&(fq->_lock));
+    fq->_xadu_access = 0;
     return 0;
 }
 
@@ -235,9 +260,7 @@ String
 FullNoteLockQueue::get_resize_capacity(Element *e, void *)
 {
     FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    pthread_mutex_lock(&(fq->_lock));
     int cap = fq->_capacity;
-    pthread_mutex_unlock(&(fq->_lock));
     return String(cap);
 }
 
@@ -245,9 +268,6 @@ void
 FullNoteLockQueue::add_handlers()
 {
     NotifierQueue::add_handlers();
-    add_read_handler("enqueue_bytes", read_enqueue_bytes, 0);
-    add_read_handler("dequeue_bytes", read_dequeue_bytes, 0);
-    add_read_handler("bytes", read_bytes, 0);
     add_write_handler("resize_capacity", resize_capacity, 0);
     add_read_handler("resize_capacity", get_resize_capacity, 0);
     add_write_handler("clear", clear, 0);

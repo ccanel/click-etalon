@@ -2,9 +2,9 @@
 #ifndef CLICK_FULLNOTELOCKQUEUE_HH
 #define CLICK_FULLNOTELOCKQUEUE_HH
 #include "notifierqueue.hh"
-#include <pthread.h>
 #include <unordered_map>
 #include <tuple>
+#include <atomic>
 CLICK_DECLS
 
 /*
@@ -137,6 +137,7 @@ class FullNoteLockQueue : public NotifierQueue { public:
 
     int configure(Vector<String> &conf, ErrorHandler *) CLICK_COLD;
     int live_reconfigure(Vector<String> &conf, ErrorHandler *errh);
+    void take_state(Element*, ErrorHandler*);
     //#if CLICK_DEBUG_SCHEDULING
     void add_handlers() CLICK_COLD;
     //#endif
@@ -144,13 +145,11 @@ class FullNoteLockQueue : public NotifierQueue { public:
     void push(int port, Packet *p);
     Packet *pull(int port);
 
+    long long get_bytes();
     long long get_seen_adu(struct traffic_info);
+    bool use_adus;
 
   protected:
-
-    unsigned long long enqueue_bytes;
-    unsigned long long dequeue_bytes;
-    unsigned long long dequeue_bytes_no_headers;
 
     ActiveNotifier _full_note;
 
@@ -161,12 +160,10 @@ class FullNoteLockQueue : public NotifierQueue { public:
 				Storage::index_type nh);
     inline Packet *pull_failure();
 
+
 #if CLICK_DEBUG_SCHEDULING
     static String read_handler(Element *e, void *user_data) CLICK_COLD;
 #endif
-    static String read_enqueue_bytes(Element *e, void *user_data);
-    static String read_dequeue_bytes(Element *e, void *user_data);
-    static String read_bytes(Element *e, void *user_data);
     static int resize_capacity(const String&, Element*, void*, ErrorHandler*);
     static String get_resize_capacity(Element *e, void *user_data);
     static int clear(const String&, Element*, void*, ErrorHandler*);
@@ -174,7 +171,10 @@ class FullNoteLockQueue : public NotifierQueue { public:
     std::unordered_map<const tcp_and_seq, Timestamp, seq_key_hash, seq_key_equal> seen_seq;
     std::unordered_map<const struct traffic_info, long long, info_key_hash, info_key_equal> seen_adu;
 
-    pthread_mutex_t _lock;
+private:
+    atomic_uint32_t _xhead;
+    atomic_uint32_t _xtail;
+    atomic_uint32_t _xadu_access;
 };
 
 inline void
