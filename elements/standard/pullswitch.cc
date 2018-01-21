@@ -77,7 +77,7 @@ PullSwitch::pull(int)
 	return p;
     } else {
 	if (!_signals[_input])
-		_notifier.set_active(false, false);
+	    _notifier.set_active(false, false);
 	return 0;
     }
 }
