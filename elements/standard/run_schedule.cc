@@ -90,22 +90,6 @@ RunSchedule::initialize(ErrorHandler *errh)
         }
     }
 
-    _circuit_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
-    for(int dst = 0; dst < _num_hosts; dst++) {
-        char handler[500];
-        sprintf(handler, "hybrid_switch/coc%d.color", dst+1);
-        _circuit_label[dst] = new HandlerCall(handler);
-        _circuit_label[dst]->initialize(HandlerCall::f_write, this, errh);
-    }
-
-    _packet_label = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
-    for(int dst = 0; dst < _num_hosts; dst++) {
-        char handler[500];
-        sprintf(handler, "hybrid_switch/cop%d.color", dst+1);
-        _packet_label[dst] = new HandlerCall(handler);
-        _packet_label[dst]->initialize(HandlerCall::f_write, this, errh);
-    }
-
     _ece_map = new HandlerCall("ecem.setECE");
     _ece_map->initialize(HandlerCall::f_write, this, errh);
 
@@ -269,9 +253,6 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 _packet_pull_switch[next_src * _num_hosts + dst]->
                     call_write(String(-1));
             }
-
-            // _circuit_label[dst]->call_write(String(src+1));
-            // _packet_label[dst]->call_write(String(src+1));
         }
 
         char conf[500];

@@ -56,8 +56,6 @@ class RunSchedule : public Element {
     HandlerCall **_queue_capacity;
     HandlerCall **_pull_switch;
     HandlerCall **_packet_pull_switch;
-    HandlerCall **_circuit_label;
-    HandlerCall **_packet_label;
     HandlerCall *_ece_map;
     HandlerCall *_log_config;
     int _print;
