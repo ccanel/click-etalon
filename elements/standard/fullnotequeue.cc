@@ -18,8 +18,6 @@
 
 #include <click/config.h>
 #include "fullnotequeue.hh"
-#include <clicknet/tcp.h>
-
 CLICK_DECLS
 
 FullNoteQueue::FullNoteQueue()
@@ -61,9 +59,9 @@ FullNoteQueue::push(int, Packet *p)
     Storage::index_type h = head(), t = tail(), nt = next_i(t);
 
     if (nt != h)
-        push_success(h, t, nt, p);
+	push_success(h, t, nt, p);
     else
-        push_failure(p);
+	push_failure(p);
 }
 
 Packet *
@@ -73,9 +71,9 @@ FullNoteQueue::pull(int)
     Storage::index_type h = head(), t = tail(), nh = next_i(h);
 
     if (h != t)
-        return pull_success(h, nh);
+	return pull_success(h, nh);
     else
-        return pull_failure();
+	return pull_failure();
 }
 
 #if CLICK_DEBUG_SCHEDULING
@@ -93,7 +91,6 @@ FullNoteQueue::add_handlers()
     NotifierQueue::add_handlers();
     add_read_handler("notifier_state", read_handler, 0);
 }
-#else
 #endif
 
 CLICK_ENDDECLS

@@ -74,9 +74,9 @@ class FullNoteQueue : public NotifierQueue { public:
 
     int configure(Vector<String> &conf, ErrorHandler *) CLICK_COLD;
     int live_reconfigure(Vector<String> &conf, ErrorHandler *errh);
-    #if CLICK_DEBUG_SCHEDULING
+#if CLICK_DEBUG_SCHEDULING
     void add_handlers() CLICK_COLD;
-    #endif
+#endif
 
     void push(int port, Packet *p);
     Packet *pull(int port);
@@ -119,6 +119,7 @@ FullNoteQueue::push_success(Storage::index_type h, Storage::index_type t,
 	if (size() < capacity())
 	    _full_note.wake();
 #endif
+
     }
 }
 
