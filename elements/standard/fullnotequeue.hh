@@ -95,6 +95,7 @@ class FullNoteQueue : public NotifierQueue { public:
 #if CLICK_DEBUG_SCHEDULING
     static String read_handler(Element *e, void *user_data) CLICK_COLD;
 #endif
+
 };
 
 inline void
@@ -119,7 +120,6 @@ FullNoteQueue::push_success(Storage::index_type h, Storage::index_type t,
 	if (size() < capacity())
 	    _full_note.wake();
 #endif
-
     }
 }
 
