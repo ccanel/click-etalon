@@ -199,8 +199,11 @@ EstimateTraffic::run_task(Task *)
                             FD_CLR(i, &_active_fd_set);
                             exit(EXIT_FAILURE);
                         }
-                        // fprintf(stderr, "[CTRL] SRC: %s DST: %s SIZE: %ld\n",
-                        //         info.src, info.dst, info.size);
+			// char src[INET_ADDRSTRLEN], dst[INET_ADDRSTRLEN];
+			// inet_ntop(AF_INET, &(info.src), src, INET_ADDRSTRLEN);
+			// inet_ntop(AF_INET, &(info.dst), dst, INET_ADDRSTRLEN);
+                        // fprintf(stderr, "[CTRL] SRC: %s DST: %s PROTO: %d SPORT: %d DPORT: %d SIZE: %ld\n",
+                        //         src, dst, info.proto, info.sport, info.dport, info.size);
                         if (nbytes != sizeof(info)) {
                             fprintf(stderr, "did not read enough bytes from ADU socket... exiting\n");
                             exit(EXIT_FAILURE);
