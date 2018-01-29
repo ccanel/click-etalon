@@ -39,6 +39,7 @@ class Solstice : public Element {
 
   private:
     static int set_enabled(const String&, Element*, void*, ErrorHandler*) CLICK_COLD;
+    static int set_thresh(const String&, Element*, void*, ErrorHandler*) CLICK_COLD;
 
     sols_t _s;
     long long *_traffic_matrix;
@@ -46,6 +47,7 @@ class Solstice : public Element {
     int _num_hosts;
     int _print;
     int _print2;
+    unsigned int _thresh;
 
     HandlerCall *_tm;
     HandlerCall *_runner;

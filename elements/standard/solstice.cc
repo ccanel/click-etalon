@@ -64,6 +64,7 @@ Solstice::configure(Vector<String> &conf, ErrorHandler *errh)
     _print2 = 0;
 
     use_adus = false;
+    _thresh = 1000000;
 
     enabled = true;
 
@@ -132,19 +133,19 @@ Solstice::run_task(Task *)
             }
         }
 
-	// if some demand is greater than 1,000,000,
-	// ignore demand lower than 1,000,000
+	// if some demand is greater than _thresh (1,000,000),
+	// ignore demand lower than _thresh (1,000,000)
 	bool big_demand = false;
 	for (int src = 0; src < _num_hosts; src++) {
 	    for (int dst = 0; dst < _num_hosts; dst++) {
-		if (sols_mat_get(&_s.future, src, dst) >= 1000000)
+		if (sols_mat_get(&_s.future, src, dst) >= _thresh)
 		    big_demand = true;
 	    }
 	}
 	if (big_demand || use_adus) {
 	    for (int src = 0; src < _num_hosts; src++) {
 		for (int dst = 0; dst < _num_hosts; dst++) {
-		    if (sols_mat_get(&_s.future, src, dst) < 1000000) {
+		    if (sols_mat_get(&_s.future, src, dst) < _thresh) {
 			sols_mat_set(&_s.future, src, dst, 0);
 		    }
 		}
@@ -273,10 +274,19 @@ Solstice::set_enabled(const String &str, Element *e, void *, ErrorHandler *)
     return 0;
 }
 
+int
+Solstice::set_thresh(const String &str, Element *e, void *, ErrorHandler *)
+{
+    Solstice *s = static_cast<Solstice *>(e);
+    s->_thresh = atoi(str.c_str());
+    return 0;
+}
+
 void
 Solstice::add_handlers()
 {
     add_write_handler("setEnabled", set_enabled, 0);
+    add_write_handler("setThresh", set_enabled, 0);
 }
 
 
