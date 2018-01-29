@@ -286,7 +286,7 @@ void
 Solstice::add_handlers()
 {
     add_write_handler("setEnabled", set_enabled, 0);
-    add_write_handler("setThresh", set_enabled, 0);
+    add_write_handler("setThresh", set_thresh, 0);
 }
 
 
