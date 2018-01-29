@@ -200,6 +200,17 @@ FullNoteLockQueue::resize_capacity(const String &str, Element *e, void *,
 }
 
 int
+FullNoteLockQueue::clear_adus()
+{
+    do {
+    } while (_xadu_access.compare_swap(0, 1) != 0);
+    seen_adu = std::unordered_map<const struct traffic_info, long long,
+				  info_key_hash, info_key_equal>();
+    _xadu_access = 0;
+    return 0;
+}
+
+int
 FullNoteLockQueue::clear(const String &, Element *e, void *,
 			 ErrorHandler *)
 {

@@ -146,6 +146,7 @@ class FullNoteLockQueue : public NotifierQueue { public:
 
     long long get_bytes();
     long long get_seen_adu(struct traffic_info);
+    int clear_adus();
     bool use_adus;
 
   protected:
