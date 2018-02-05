@@ -300,7 +300,7 @@ EstimateTraffic::run_task(Task *)
 	    long long current_nano = 1e9 * ts_new.tv_sec + ts_new.tv_nsec;
 	    long long last_nano = 1e9 * _last_queue_clear.tv_sec + _last_queue_clear.tv_nsec;
 	    if (current_nano > last_nano + _queue_clear_timeout) {
-		clear my ADUs
+		// clear my ADUs
 		pthread_mutex_lock(&_adu_lock);
 		expected_adu = std::unordered_map<const struct traffic_info, long long,
 						  info_key_hash, info_key_equal>();
