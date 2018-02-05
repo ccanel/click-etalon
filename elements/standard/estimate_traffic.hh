@@ -49,6 +49,9 @@ class EstimateTraffic : public Element {
     int _serverSocket;
     fd_set _active_fd_set;
 
+    int _queue_clear_timeout;
+    struct timespec _last_queue_clear;
+
     int _num_hosts;
 
     long long *_traffic_matrix;

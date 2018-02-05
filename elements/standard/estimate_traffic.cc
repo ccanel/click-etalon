@@ -61,6 +61,9 @@ EstimateTraffic::configure(Vector<String> &conf, ErrorHandler *errh)
                                           _num_hosts * _num_hosts);
     bzero(_traffic_matrix, sizeof(long long) * _num_hosts * _num_hosts);
 
+    _queue_clear_timeout = 1e9;  // 1s
+    clock_gettime(CLOCK_MONOTONIC, &_last_queue_clear);
+
     _print = 0;
 
     output_traffic_matrix = new String;
@@ -266,7 +269,7 @@ EstimateTraffic::run_task(Task *)
 	    for (int src = 0; src < _num_hosts; src++) {
                 for (int dst = 0; dst < _num_hosts; dst++) {
                     int i = src * _num_hosts + dst;
-                    _traffic_matrix[i] = _queues[i]->get_bytes();
+                    _traffic_matrix[i] += _queues[i]->get_bytes();
                     if (_traffic_matrix[i] < 0)
                         _traffic_matrix[i] = 0;
                 }
@@ -289,6 +292,28 @@ EstimateTraffic::run_task(Task *)
 	pthread_mutex_unlock(&_lock);
 
         _print = (_print + 1) % 100000;
+
+	// clear ADUs periodically
+	if (source == "ADU") {
+	    struct timespec ts_new;
+	    clock_gettime(CLOCK_MONOTONIC, &ts_new);
+	    long long current_nano = 1e9 * ts_new.tv_sec + ts_new.tv_nsec;
+	    long long last_nano = 1e9 * _last_queue_clear.tv_sec + _last_queue_clear.tv_nsec;
+	    if (current_nano > last_nano + _queue_clear_timeout) {
+		clear my ADUs
+		pthread_mutex_lock(&_adu_lock);
+		expected_adu = std::unordered_map<const struct traffic_info, long long,
+						  info_key_hash, info_key_equal>();
+		pthread_mutex_unlock(&_adu_lock);
+		// clear queue ADUs
+		for(int src = 0; src < _num_hosts; src++) {
+		    for(int dst = 0; dst < _num_hosts; dst++) {
+			_queues[src * _num_hosts + dst]->clear_adus();
+		    }
+		}
+		_last_queue_clear = ts_new;
+	    }
+	}
     }
     return true;
 }
