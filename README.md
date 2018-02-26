@@ -9,6 +9,39 @@ will give you a feeling for what Click can do. Using the optimization tools
 under `CLICKDIR/tools`, you can get even better performance than that paper
 describes.
 
+Changes in Etalon
+=================
+
+We modify Click to add the elements shown in our paper.
+
+To summarize, the following elements have been added / modified:
+
+- ```elements/standard/ecemark```: Sets the ECE bit on ACKs, if data packets for
+  this flow currently have a circuit.
+
+- ```elements/standard/estimate_traffic```: Builds an estimated rack-to-rack
+  traffic demand matrix. Either does this based on the number of packets sitting
+  in ToR VOQs, or by receiving ADU information from endhosts.
+
+- ```elements/standard/fullnotelockqueue```: A copy of fullnotequeue that has
+  locks (atomics) on enqueue/dequeue/resize. Also keeps track of how many bytes
+  have been dequeued if we are using ADUs.
+
+- ```elements/standard/hslog```: Per-packet logging to build graphs.
+
+- ```elements/standard/linkunqueue```: Keeps track of how many bytes were unqueued.
+
+- ```elements/standard/run_schedule```: Run a circuit schedule. Does things like
+  buffer resizing if requested.
+
+- ```elements/standard/simplequeue```: Keeps track of how many bytes are queued.
+
+- ```elements/standard/solstice```: Run solstice scheduler (see
+  ```lib/sols.c```) on the estimated demand and pass the output to
+  ```run_schedule```.
+
+See https://github.com/mukerjee/click-etalon/compare for a detailed list of changes.
+
 Contents
 --------
 
