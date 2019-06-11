@@ -22,7 +22,7 @@
 #include <click/error.hh>
 #include <click/standard/scheduleinfo.hh>
 #include <sys/select.h>
-
+#include <sched.h>
 CLICK_DECLS
 
 Solstice::Solstice() : _task(this)
