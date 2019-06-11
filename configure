@@ -10433,7 +10433,7 @@ HAVE_MINIOS_DRIVER=0
 OTHER_TARGETS=
 
 
-for i in click-align click-check click-combine click-devirtualize click-fastclassifier click-flatten click-ipopt click-mkmindriver click-pretty click-undead click-xform click2xml; do
+for i in click-align click-check click-combine click-devirtualize click-fastclassifier click-flatten click-ipopt click-mkmindriver click-undead click-xform click2xml; do
     test -d $srcdir/tools/$i && \
         TOOLDIRS="$TOOLDIRS $i" TOOL_TARGETS="$TOOL_TARGETS $i"
 done
