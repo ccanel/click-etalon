@@ -95,8 +95,13 @@ ECEMark::set_ece(const String &str, Element *e, void *, ErrorHandler *)
         emap[src * hosts + dst] = 1;
     }
     int *temp = ecem->ece_map;
+    // Set the new ece map. Do this before freeing the old ece map so that the ece
+    // map is always valid.
     ecem->ece_map = emap;
-    free(temp);
+    if (temp != nullptr) {
+        // Free the old ece map, if it had been set.
+	free(temp);
+    }
     return 0;
 }
 
