@@ -47,12 +47,12 @@ RunSchedule::configure(Vector<String> &conf, ErrorHandler *errh)
     next_schedule = "";
     return 0;
 }
- 
+
 int
 RunSchedule::initialize(ErrorHandler *errh)
 {
     ScheduleInfo::initialize_task(this, &_task, true, errh);
-    
+
 #if defined(__linux__)
     sched_setscheduler(getpid(), SCHED_RR, NULL);
 #endif
@@ -175,13 +175,13 @@ RunSchedule::execute_schedule(ErrorHandler *)
     new_sched = false;
     pthread_mutex_unlock(&lock);
 
-        
+
     _print = (_print+1) % 100;
     if (!_print) {
         if (current_schedule)
             printf("running sched %s\n", current_schedule.c_str());
     }
-    
+
     if (current_schedule == "")
         return 0;
     Vector<String> v = RunSchedule::split(current_schedule, ' ');
@@ -341,7 +341,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 _packet_pull_switch[src * _num_hosts + dst]->call_write(String(0));
             }
         }
-    }    
+    }
     free(durations);
     return 0;
 }
