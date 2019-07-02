@@ -27,3 +27,4 @@ share/click/pkg-config.mk
 stamp-egroup
 stamp-h
 .DS_Store
+*.swp
