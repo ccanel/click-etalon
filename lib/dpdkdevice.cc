@@ -248,7 +248,11 @@ int DPDKDevice::initialize_device(ErrorHandler *errh)
     if (info.init_mtu != 0) {
         if (rte_eth_dev_set_mtu(port_id, info.init_mtu) != 0) {
             return errh->error("Could not set MTU %d",info.init_mtu);
-        }
+        } else {
+            uint16_t real_mtu = -1;
+            rte_eth_dev_get_mtu(port_id, &real_mtu);
+            printf("did set MTU to: %d\n", real_mtu);
+	}
     }
 
     int err = rte_eth_dev_start(port_id);
