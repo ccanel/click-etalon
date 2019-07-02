@@ -102,6 +102,9 @@ bool FromDPDKDevice::run_task(Task * t)
     struct rte_mbuf *pkts[_burst_size];
 
     unsigned n = rte_eth_rx_burst(_dev->port_id, _queue_id, pkts, _burst_size);
+    if (n > 0) {
+        printf("received %u packets\n", n);
+    }
     for (unsigned i = 0; i < n; ++i) {
         unsigned char* data = rte_pktmbuf_mtod(pkts[i], unsigned char *);
         rte_prefetch0(data);
