@@ -483,11 +483,7 @@ DPDKDeviceArg::parse(
 }
 
 int DPDKDevice::NB_MBUF = 65536;
-#ifdef RTE_MBUF_DEFAULT_BUF_SIZE
-int DPDKDevice::MBUF_DATA_SIZE = RTE_MBUF_DEFAULT_BUF_SIZE;
-#else
-int DPDKDevice::MBUF_DATA_SIZE = 2048 + RTE_PKTMBUF_HEADROOM;
-#endif
+int DPDKDevice::MBUF_DATA_SIZE = 9000;
 int DPDKDevice::MBUF_SIZE = MBUF_DATA_SIZE
                           + sizeof (struct rte_mbuf);
 int DPDKDevice::MBUF_CACHE_SIZE = 256;
