@@ -73,10 +73,8 @@ int FromDPDKDevice::configure(Vector<String> &conf, ErrorHandler *errh)
     if (has_mac)
         _dev->set_init_mac(mac);
 
-    if (has_mtu) {
+    if (has_mtu)
         _dev->set_init_mtu(mtu);
-	printf("will set MTU to: %d\n", mtu);
-    }
 
     return _dev->add_rx_queue(_queue_id, _promisc, (n_desc > 0) ?
                                 n_desc : DPDKDevice::DEF_DEV_RXDESC,
