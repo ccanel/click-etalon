@@ -47,7 +47,7 @@ int
 FullNoteLockQueue::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     int new_thresh = 40;
-    if (Args(conf, this, errh).read("THRESHOLD", new_thresh).complete() < 0)
+    if (Args(conf, this, errh).read("THRESHOLD", new_thresh).consume() < 0)
 	return -1;
     if (!validate_thresh(new_thresh)) {
 	return -1;
