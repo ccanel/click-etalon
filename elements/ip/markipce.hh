@@ -21,7 +21,7 @@ and passes the packet to output 0.  Packets whose ECN field is zero (not
 ECN-capable) are dropped unless the optional FORCE argument is true.
 
 B<Note:> This element only modifies a packet's ECN field if the packet has the
-THRESHOLD_MARK_ANNO user annotation set to 1.
+THRESH_EXCEEDED_ANNO user annotation set to 1.
 
 =a LockQueue */
 

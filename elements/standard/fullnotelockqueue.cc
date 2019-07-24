@@ -88,7 +88,7 @@ FullNoteLockQueue::push(int, Packet *p)
 	if (size() + 1 > _thresh) {
 	    mark = 1;
 	}
-	SET_THRESH_MARK_ANNO(p, mark);
+	SET_THRESH_EXCEEDED_ANNO(p, mark);
     }
 
     Storage::index_type h = head(), t = tail(), nt = next_i(t);

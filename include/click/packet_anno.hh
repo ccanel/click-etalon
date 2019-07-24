@@ -30,10 +30,10 @@
 
 // byte 17. 1 if this packet caused a queue to exceed its threshold size,
 // otherwise 0.
-#define THRESH_MARK_ANNO_OFFSET	        17
-#define THRESH_MARK_ANNO_SIZE	        1
-#define THRESH_MARK_ANNO(p)		((p)->anno_u8(THRESH_MARK_ANNO_OFFSET))
-#define SET_THRESH_MARK_ANNO(p, v)	((p)->set_anno_u8(THRESH_MARK_ANNO_OFFSET, (v)))
+#define THRESH_EXCEEDED_ANNO_OFFSET	        17
+#define THRESH_EXCEEDED_ANNO_SIZE	        1
+#define THRESH_EXCEEDED_ANNO(p)		((p)->anno_u8(THRESH_EXCEEDED_ANNO_OFFSET))
+#define SET_THRESH_EXCEEDED_ANNO(p, v)	((p)->set_anno_u8(THRESH_EXCEEDED_ANNO_OFFSET, (v)))
 
 // byte 19
 #define FIX_IP_SRC_ANNO_OFFSET		19

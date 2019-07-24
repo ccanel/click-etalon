@@ -56,7 +56,7 @@ MarkIPCE::simple_action(Packet *p)
 
     // Only set this packet's ECN bits to Congestion Experienced if it has been
     // marked as having caused a queue to exceed its threshold size.
-    if (THRESH_MARK_ANNO(q)) {
+    if (THRESH_EXCEEDED_ANNO(q)) {
       click_ip *q_iph = q->ip_header();
       uint16_t old_hw = *(uint16_t *) q_iph;
       q_iph->ip_tos |= IP_ECN_CE;

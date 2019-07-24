@@ -21,8 +21,8 @@ stores packets in a FIFO queue
 Stores incoming packets in a first-in-first-out queue. Drops incoming packets if
 the queue already holds CAPACITY packets. The default for CAPACITY is 1000. If
 adding a packet to the queue would cause its size to exceed THRESHOLD packets,
-then the packet's user annotation THRESH_MARK_ANNO is set to 1. The default for
-THRESHOLD is 40.
+then the packet's user annotation THRESH_EXCEEDED_ANNO is set to 1. The default
+for THRESHOLD is 40.
 
 B<Note:> THRESHOLD is part of the implementation of ECN marking for DCTCP. The
 actual ECN marking is performed by B<ECEMark>.
