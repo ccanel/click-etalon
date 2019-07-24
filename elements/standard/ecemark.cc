@@ -87,8 +87,8 @@ ECEMark::simple_action(Packet *p)
 int
 ECEMark::set_ece(const String &str, Element *e, void *, ErrorHandler *)
 {
-    ECEMark *ecem = static_cast<ECEMark *>(e);
-    int hosts = ecem->_num_hosts + 1;
+    ECEMark *ece = static_cast<ECEMark *>(e);
+    int hosts = ece->_num_hosts + 1;
     int *emap = (int *)malloc(sizeof(int) * hosts * hosts);
     bzero(emap, sizeof(int) * hosts * hosts);
     const char *s = str.c_str();
@@ -97,10 +97,10 @@ ECEMark::set_ece(const String &str, Element *e, void *, ErrorHandler *)
         int dst = s[i+1] - '0';
         emap[src * hosts + dst] = 1;
     }
-    int *temp = ecem->ece_map;
+    int *temp = ece->ece_map;
     // Set the new ece map. Do this before freeing the old ece map so that the ece
     // map is always valid.
-    ecem->ece_map = emap;
+    ece->ece_map = emap;
     if (temp != nullptr) {
         // Free the old ece map, if it had been set.
 	free(temp);
