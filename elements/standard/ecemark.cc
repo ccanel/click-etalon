@@ -36,6 +36,7 @@ ECEMark::configure(Vector<String> &conf, ErrorHandler *errh)
         return -1;
     if (_num_hosts == 0)
         return -1;
+    _enabled = false;
     return 0;
 }
 
@@ -56,6 +57,8 @@ Packet *
 ECEMark::simple_action(Packet *p)
 {
     if (p->ip_header()->ip_p != IP_PROTO_TCP)
+	return p;
+    if (!_enabled)
 	return p;
 
     int src = p->anno_u8(20);
@@ -109,6 +112,29 @@ void
 ECEMark::add_handlers()
 {
     add_write_handler("setECE", set_ece, 0);
+    add_write_handler("enabled", set_enabled, 0);
+    add_read_handler("enabled", get_enabled, 0);
+}
+
+int
+ECEMark::set_enabled(const String &str, Element *e, void *,
+			     ErrorHandler *errh)
+{
+    ArgContext ctx(errh);
+    bool new_enabled = false;
+    if (!BoolArg().parse(str, new_enabled, ctx)) {
+	return -1;
+    }
+    ECEMark *ece = static_cast<ECEMark *>(e);
+    ece->_enabled = new_enabled;
+    return 0;
+}
+
+String
+ECEMark::get_enabled(Element *e, void *)
+{
+    ECEMark *ece = static_cast<ECEMark *>(e);
+    return String(ece->_enabled);
 }
 
 CLICK_ENDDECLS

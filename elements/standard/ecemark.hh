@@ -5,15 +5,27 @@
 CLICK_DECLS
 
 /* =c
+ *
  * ECEMark()
+ *
  * =s basicmod
- * Marks ECE bits when a rack has/is going to have a circuit.
+ *
+ * Marks ECE bits when a rack has/is going to have a circuit. B<Note:> This
+ * element must be explicitly enabled using the "enabled" write handler (see
+ * below).
+ *
  * =d
  *
  * Marks ECE bits when a rack has/is going to have a circuit.
  *
- * =a AlignmentInfo, click-align(1) */
-
+ * =h enabled read/write
+ *
+ * Returns whether ECE marking is enabled. When written, enables or disables
+ * marking.
+ *
+ * =h setECE write-only
+ *
+ * Set new ECE map. */
 class ECEMark : public Element { public:
 
     ECEMark() CLICK_COLD;
@@ -27,8 +39,13 @@ class ECEMark : public Element { public:
     
     Packet *simple_action(Packet *);
 
+protected:
+    bool _enabled;
+
 private:
     static int set_ece(const String&, Element*, void*, ErrorHandler*);
+    static int set_enabled(const String&, Element*, void*, ErrorHandler*);
+    static String get_enabled(Element *e, void *user_data);
     int *ece_map;
     int _num_hosts;
 };
