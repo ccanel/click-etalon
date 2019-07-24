@@ -10,8 +10,7 @@ CLICK_DECLS
 /*
 =c
 
-Queue
-Queue(CAPACITY)
+LockQueue([CAPACITY, THRESH])
 
 =s storage
 
@@ -19,9 +18,12 @@ stores packets in a FIFO queue
 
 =d
 
-Stores incoming packets in a first-in-first-out queue.
-Drops incoming packets if the queue already holds CAPACITY packets.
-The default for CAPACITY is 1000.
+Stores incoming packets in a first-in-first-out queue. Drops incoming packets if
+the queue already holds CAPACITY packets. The default for CAPACITY is 1000. If
+adding a packet to the queue would cause its size to exceed THRESHOLD packets,
+then the packet's user annotation THRESH_MARK_ANNO is set to 1. The default for
+THRESHOLD is 40. Note: THRESHOLD is part of the implementation of ECN marking
+for DCTCP.
 
 Queue notifies interested parties when it becomes empty and when a
 formerly-empty queue receives a packet.  The empty notification takes place
@@ -64,6 +66,16 @@ When written, resets the C<drops> and C<highwater_length> counters.
 =h reset write-only
 
 When written, drops all packets in the queue.
+
+=h marking_enabled read/write
+
+Returns whether threshold-based marking is enabled. When written, enables or
+disables marking.
+
+=h marking_threshold read/write
+
+Returns the current marking threshold. When written, modifies the marking
+threshold.
 
 =a ThreadSafeQueue, QuickNoteQueue, SimpleQueue, NotifierQueue, MixedQueue,
 FrontDropQueue */
@@ -137,9 +149,7 @@ class FullNoteLockQueue : public NotifierQueue { public:
 
     int configure(Vector<String> &conf, ErrorHandler *) CLICK_COLD;
     int live_reconfigure(Vector<String> &conf, ErrorHandler *errh);
-    //#if CLICK_DEBUG_SCHEDULING
     void add_handlers() CLICK_COLD;
-    //#endif
 
     void push(int port, Packet *p);
     Packet *pull(int port);
@@ -167,14 +177,26 @@ class FullNoteLockQueue : public NotifierQueue { public:
     static int resize_capacity(const String&, Element*, void*, ErrorHandler*);
     static String get_resize_capacity(Element *e, void *user_data);
     static int clear(const String&, Element*, void*, ErrorHandler*);
+    static int set_marking_enabled(const String&, Element*, void*, ErrorHandler*);
+    static String get_marking_enabled(Element *e, void *user_data);
+    static int set_marking_thresh(const String&, Element*, void*, ErrorHandler*);
+    static String get_marking_thresh(Element *e, void *user_data);
 
     std::unordered_map<const tcp_and_seq, Timestamp, seq_key_hash, seq_key_equal> seen_seq;
     std::unordered_map<const struct traffic_info, long long, info_key_hash, info_key_equal> seen_adu;
+
+    int _thresh;
+    bool _marking_enabled;
 
 private:
     atomic_uint32_t _xadu_access;
     atomic_uint32_t _xdeq;
     atomic_uint32_t _xenq;
+
+    /** @brief Validates whether a threshold value is well-formed.
+     * @param thresh threshold to validate
+     * @return true if thresh is well-formed, false otherwise */
+    static bool validate_thresh(int thresh);
 };
 
 inline void

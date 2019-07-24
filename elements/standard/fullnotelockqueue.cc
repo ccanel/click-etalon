@@ -19,6 +19,8 @@
 #include <click/config.h>
 #include "fullnotelockqueue.hh"
 #include <tuple>
+#include <click/args.hh>
+#include <click/packet_anno.hh>
 #include <clicknet/tcp.h>
 #include <clicknet/udp.h>
 
@@ -44,6 +46,15 @@ FullNoteLockQueue::cast(const char *n)
 int
 FullNoteLockQueue::configure(Vector<String> &conf, ErrorHandler *errh)
 {
+    int new_thresh = 40;
+    if (Args(conf, this, errh).read("THRESHOLD", new_thresh).complete() < 0)
+	return -1;
+    if (!validate_thresh(new_thresh)) {
+	return -1;
+    }
+    _thresh = new_thresh;
+    _marking_enabled = false;
+
     _full_note.initialize(Notifier::FULL_NOTIFIER, router());
     _full_note.set_active(true, false);
     return NotifierQueue::configure(conf, errh);
@@ -69,6 +80,16 @@ FullNoteLockQueue::push(int, Packet *p)
 {
     do {
     } while (_xenq.compare_swap(0, 1) != 0);
+
+    if (_marking_enabled) {
+	uint8_t mark = 0;
+	// Mark this packet if adding it to the queue would increase the queue's
+	// size past the threshold.
+	if (size() + 1 > _thresh) {
+	    mark = 1;
+	}
+	SET_THRESH_MARK_ANNO(p, mark);
+    }
 
     Storage::index_type h = head(), t = tail(), nt = next_i(t);
     if (nt != h) {
@@ -231,6 +252,51 @@ FullNoteLockQueue::get_resize_capacity(Element *e, void *)
     return String(cap);
 }
 
+int
+FullNoteLockQueue::set_marking_enabled(const String &str, Element *e, void *,
+				       ErrorHandler *errh)
+{
+    ArgContext ctx(errh);
+    bool new_enabled = false;
+    if (!BoolArg().parse(str, new_enabled, ctx)) {
+	return -1;
+    }
+    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
+    fq->_marking_enabled = new_enabled;
+    return 0;
+}
+
+String
+FullNoteLockQueue::get_marking_enabled(Element *e, void *)
+{
+    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
+    return String(fq->_marking_enabled);
+}
+
+int
+FullNoteLockQueue::set_marking_thresh(const String &str, Element *e, void *,
+				       ErrorHandler *errh)
+{
+    ArgContext ctx(errh);
+    int new_thresh = 0;
+    if (!IntArg(10).parse(str, new_thresh, ctx)) {
+	return -1;
+    }
+    if (!validate_thresh(new_thresh)) {
+	return -1;
+    }
+    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
+    fq->_thresh = new_thresh;
+    return 0;
+}
+
+String
+FullNoteLockQueue::get_marking_thresh(Element *e, void *)
+{
+    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
+    return String(fq->_thresh);
+}
+
 void
 FullNoteLockQueue::add_handlers()
 {
@@ -238,6 +304,16 @@ FullNoteLockQueue::add_handlers()
     add_write_handler("resize_capacity", resize_capacity, 0);
     add_read_handler("resize_capacity", get_resize_capacity, 0);
     add_write_handler("clear", clear, 0);
+    add_write_handler("marking_enabled", set_marking_enabled, 0);
+    add_read_handler("marking_enabled", get_marking_enabled, 0);
+    add_write_handler("marking_threshold", set_marking_thresh, 0);
+    add_read_handler("marking_threshold", get_marking_thresh, 0);
+}
+
+bool
+FullNoteLockQueue::validate_thresh(int thresh)
+{
+    return thresh > 0;
 }
 #endif
 
