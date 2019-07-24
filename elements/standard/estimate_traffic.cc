@@ -138,7 +138,7 @@ EstimateTraffic::initialize(ErrorHandler *errh)
             sprintf(handler, "hybrid_switch/q%d%d/q", src+1, dst+1);
 	    _queues[src * _num_hosts + dst] = (FullNoteLockQueue *)router()->find(handler);
 	    if (!_queues[src * _num_hosts + dst]) {
-		printf("failed to find queue %d %d in router. exiting...\n", src, dst);
+		printf("failed to find queue \"q%d%d\" in router. exiting...\n", src, dst);
 		exit(EXIT_FAILURE);
 	    }
         }
