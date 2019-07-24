@@ -22,8 +22,13 @@ Stores incoming packets in a first-in-first-out queue. Drops incoming packets if
 the queue already holds CAPACITY packets. The default for CAPACITY is 1000. If
 adding a packet to the queue would cause its size to exceed THRESHOLD packets,
 then the packet's user annotation THRESH_MARK_ANNO is set to 1. The default for
-THRESHOLD is 40. Note: THRESHOLD is part of the implementation of ECN marking
-for DCTCP.
+THRESHOLD is 40.
+
+B<Note:> THRESHOLD is part of the implementation of ECN marking for DCTCP. The
+actual ECN marking is performed by B<ECEMark>.
+
+B<Note:> Threshold-based marking must be explicitly enabled using the
+"marking_enabled" write handler (see below).
 
 Queue notifies interested parties when it becomes empty and when a
 formerly-empty queue receives a packet.  The empty notification takes place
@@ -69,8 +74,8 @@ When written, drops all packets in the queue.
 
 =h marking_enabled read/write
 
-Returns whether threshold-based marking is enabled. When written, enables or
-disables marking.
+"true" or "false". When read, returns whether threshold-based marking is
+enabled. When written, enables or disables marking.
 
 =h marking_threshold read/write
 
@@ -78,7 +83,7 @@ Returns the current marking threshold. When written, modifies the marking
 threshold.
 
 =a ThreadSafeQueue, QuickNoteQueue, SimpleQueue, NotifierQueue, MixedQueue,
-FrontDropQueue */
+FrontDropQueue, LockQueue */
 
 struct traffic_info {
     struct in_addr src;

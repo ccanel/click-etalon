@@ -11,14 +11,19 @@ MarkIPCE([FORCE])
 
 =s ip
 
-sets IP packets' ECN field to Congestion Experienced
+Sets IP packets' ECN field to Congestion Experienced.
 
 =d
 
 Expects IP packets as input.  Sets each incoming packet's ECN field to
 Congestion Experienced (value 3), incrementally recalculates the IP checksum,
 and passes the packet to output 0.  Packets whose ECN field is zero (not
-ECN-capable) are dropped unless the optional FORCE argument is true. */
+ECN-capable) are dropped unless the optional FORCE argument is true.
+
+B<Note:> This element only modifies a packet's ECN field if the packet has the
+THRESHOLD_MARK_ANNO user annotation set to 1.
+
+=a LockQueue */
 
 class MarkIPCE : public Element { public:
 

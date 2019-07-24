@@ -10,18 +10,19 @@ CLICK_DECLS
  *
  * =s basicmod
  *
- * Marks ECE bits when a rack has/is going to have a circuit. B<Note:> This
- * element must be explicitly enabled using the "enabled" write handler (see
- * below).
+ * Marks ECE bits when a rack has/is going to have a circuit.
  *
  * =d
  *
  * Marks ECE bits when a rack has/is going to have a circuit.
  *
+ * B<Note:> This element must be explicitly enabled using the "enabled" write
+ * handler (see below).
+ *
  * =h enabled read/write
  *
- * Returns whether ECE marking is enabled. When written, enables or disables
- * marking.
+ * "true" or "false". When read, returns whether ECE marking is enabled. When
+ * written, enables or disables marking.
  *
  * =h setECE write-only
  *
