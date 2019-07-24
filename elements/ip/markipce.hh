@@ -20,8 +20,13 @@ Congestion Experienced (value 3), incrementally recalculates the IP checksum,
 and passes the packet to output 0.  Packets whose ECN field is zero (not
 ECN-capable) are dropped unless the optional FORCE argument is true.
 
-B<Note:> This element only modifies a packet's ECN field if the packet has the
-THRESH_EXCEEDED_ANNO user annotation set to 1.
+B<Note:> This element only modifies a packet's ECN field if the packet's
+THRESH_EXCEEDED_ANNO user annotation is set to 1.
+
+B<Note:> This element works in conjuction with LockQueue (a.k.a.
+FullNoteLockQueue) to provide ECN marking for DCTCP. LockQueue sets a packet's
+THRESH_EXCEEDED_ANNO user annotation to 1 if, when the packet arrives, it
+encounters a queue containing more than a threshold number of packets.
 
 =a LockQueue */
 

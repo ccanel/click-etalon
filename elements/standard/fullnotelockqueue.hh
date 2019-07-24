@@ -20,12 +20,12 @@ stores packets in a FIFO queue
 
 Stores incoming packets in a first-in-first-out queue. Drops incoming packets if
 the queue already holds CAPACITY packets. The default for CAPACITY is 1000. If
-adding a packet to the queue would cause its size to exceed THRESHOLD packets,
-then the packet's user annotation THRESH_EXCEEDED_ANNO is set to 1. The default
-for THRESHOLD is 40.
+adding a packet to the queue would cause the queue's length to exceed THRESHOLD
+packets, then the packet's THRESH_EXCEEDED_ANNO user annotation is set to 1. The
+default for THRESHOLD is 40.
 
-B<Note:> THRESHOLD is part of the implementation of ECN marking for DCTCP. The
-actual ECN marking is performed by B<ECEMark>.
+B<Note:> This element works in conjuction with MarkIPCE to provide ECN marking
+for DCTCP. The actual ECN marking is performed by B<ECEMark>.
 
 B<Note:> Threshold-based marking must be explicitly enabled using the
 "marking_enabled" write handler (see below).
@@ -79,8 +79,8 @@ enabled. When written, enables or disables marking.
 
 =h marking_threshold read/write
 
-Returns the current marking threshold. When written, modifies the marking
-threshold.
+When read, returns the current marking threshold. When written, modifies the
+marking threshold.
 
 =a ThreadSafeQueue, QuickNoteQueue, SimpleQueue, NotifierQueue, MixedQueue,
 FrontDropQueue, LockQueue */
