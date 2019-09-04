@@ -81,7 +81,8 @@ RunSchedule::initialize(ErrorHandler *errh)
             _queue_marking_thresh[src * _num_hosts + dst] =
                 new HandlerCall(marking_thresh_h);
             _queue_marking_thresh[src * _num_hosts + dst]->
-                initialize(HandlerCall::f_write, this, errh);
+                initialize(HandlerCall::f_read | HandlerCall::f_write, this,
+                           errh);
         }
     }
 
