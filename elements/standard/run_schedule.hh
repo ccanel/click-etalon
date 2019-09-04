@@ -53,7 +53,10 @@ class RunSchedule : public Element {
     int _num_hosts;
     int _big_buffer_size;
     int _small_buffer_size;
+    int _big_marking_thresh;
+    int _small_marking_thresh;
     HandlerCall **_queue_capacity;
+    HandlerCall **_queue_marking_thresh;
     HandlerCall **_pull_switch;
     HandlerCall **_packet_pull_switch;
     HandlerCall *_ece_map;

@@ -28,7 +28,9 @@ CLICK_DECLS
 
 RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
                              _big_buffer_size(128), _small_buffer_size(16),
-                             _print(0), _in_advance(12000), _next_time(0)
+                             _big_marking_thresh(1000),
+                             _small_marking_thresh(1000), _print(0),
+                             _in_advance(12000), _next_time(0)
 {
     pthread_mutex_init(&lock, NULL);
     clock_gettime(CLOCK_MONOTONIC, &_start_time);
@@ -57,16 +59,29 @@ RunSchedule::initialize(ErrorHandler *errh)
     sched_setscheduler(getpid(), SCHED_RR, NULL);
 #endif
 
+    // VOQ handlers
+    _queue_marking_thresh = (HandlerCall **)malloc(sizeof(HandlerCall *) *
+                                                   _num_hosts * _num_hosts);
     _queue_capacity = (HandlerCall **)malloc(sizeof(HandlerCall *) *
                                              _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
-            char handler[500];
-            sprintf(handler, "hybrid_switch/q%d%d/q.resize_capacity", src+1, dst+1);
-            _queue_capacity[src * _num_hosts + dst] = new HandlerCall(handler);
+            char resize_cap_h[500];
+            sprintf(resize_cap_h, "hybrid_switch/q%d%d/q.resize_capacity",
+                    src+1, dst+1);
+            _queue_capacity[src * _num_hosts + dst] =
+                new HandlerCall(resize_cap_h);
             _queue_capacity[src * _num_hosts + dst]->
-                initialize(HandlerCall::f_read | HandlerCall::f_write,
-                           this, errh);
+                initialize(HandlerCall::f_read | HandlerCall::f_write, this,
+                           errh);
+
+            char marking_thresh_h[500];
+            sprintf(marking_thresh_h,
+                "hybrid_switch/q%d%d/q.marking_threshold", src+1, dst+1);
+            _queue_marking_thresh[src * _num_hosts + dst] =
+                new HandlerCall(marking_thresh_h);
+            _queue_marking_thresh[src * _num_hosts + dst]->
+                initialize(HandlerCall::f_write, this, errh);
         }
     }
 
@@ -84,7 +99,8 @@ RunSchedule::initialize(ErrorHandler *errh)
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
             sprintf(handler, "hybrid_switch/pps%d%d.switch", src+1, dst+1);
-            _packet_pull_switch[src * _num_hosts + dst] = new HandlerCall(handler);
+            _packet_pull_switch[src * _num_hosts + dst] =
+                new HandlerCall(handler);
             _packet_pull_switch[src * _num_hosts + dst]->
                 initialize(HandlerCall::f_write, this, errh);
         }
@@ -124,9 +140,13 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
         // get sizes based on queues sizes
         rs->_small_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
         rs->_big_buffer_size = rs->_small_buffer_size * 8;
+        rs->_small_marking_thresh = atoi(rs->_queue_marking_thresh[0]->call_read().c_str());
+        rs->_big_marking_thresh = rs->_small_marking_thresh * 8;
 
         printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
                rs->_big_buffer_size);
+        printf("auto resizing marking thresh: %d -> %d\n",
+               rs->_small_marking_thresh, rs->_big_marking_thresh);
     }
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -170,6 +190,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
     bool resize = do_resize;
     int small_size = _small_buffer_size;
     int big_size = _big_buffer_size;
+    int small_thresh = _small_marking_thresh;
+    int big_thresh = _big_marking_thresh;
     int in_advance = _in_advance;
     bool new_s = new_sched;
     new_sched = false;
@@ -213,15 +235,18 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 if (src == -1)
                     continue;
                 _queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
+                _queue_marking_thresh[src * _num_hosts + dst]->call_write(String(big_thresh));
                 qbig[src * _num_hosts + dst] = true;
             }
             remaining -= durations[k % num_configurations];
         }
         for(int dst = 0; dst < _num_hosts; dst++) {
             for(int src = 0; src < _num_hosts; src++) {
-                if(!qbig[src * _num_hosts + dst])
+                if(!qbig[src * _num_hosts + dst]) {
                     _queue_capacity[src * _num_hosts + dst]->
                         call_write(String(small_size));
+                    _queue_marking_thresh[src * _num_hosts + dst]->
+                        call_write(String(small_thresh));
             }
         }
         free(qbig);
@@ -289,6 +314,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
                         if(resize) { // make the next few days buffer big
                             _queue_capacity[src * _num_hosts + dst]->
                                 call_write(String(big_size));
+                            _queue_marking_thresh[src * _num_hosts + dst]->
+                                call_write(String(big_thresh));
                         }
                     }
                     remaining -= durations[(m+k) % num_configurations];
@@ -330,6 +357,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 if (not_found) {
                     _queue_capacity[src * _num_hosts + dst]->
                         call_write(String(small_size));
+                    _queue_marking_thresh[src * _num_hosts + dst]->
+                        call_write(String(small_thresh));
                 }
             }
         }
