@@ -248,6 +248,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
                         call_write(String(small_size));
                     _queue_marking_thresh[src * _num_hosts + dst]->
                         call_write(String(small_thresh));
+                }
             }
         }
         free(qbig);
