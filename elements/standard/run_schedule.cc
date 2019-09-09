@@ -337,8 +337,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
             // buffer resizing is supposed to happen...
             if (current_nano > _next_time) {
                 // set ECE
-                char ecem[500];
-                bzero(ecem, 500);
+                char ecem[5500];
+                bzero(ecem, 5500);
                 int q = 0;
                 // The time remaining in this configuration is
                 int remaining_us = in_advance + elapsed_nano / 1e3;
