@@ -86,12 +86,12 @@ RunSchedule::initialize(ErrorHandler *errh)
         }
     }
 
-    _pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
+    _circuit_pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
         char handler[500];
         sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst+1);
-        _pull_switch[dst] = new HandlerCall(handler);
-        _pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
+        _circuit_pull_switch[dst] = new HandlerCall(handler);
+        _circuit_pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
     }
 
     _packet_pull_switch = (HandlerCall **)malloc(sizeof(HandlerCall *) * \
@@ -224,6 +224,18 @@ RunSchedule::execute_schedule(ErrorHandler *)
         j++;
     }
 
+    // Print configurations.
+    printf("all configurations:\n");
+    printf("  num_configurations: %d\n", num_configurations);
+    for (int i = 0; i < num_configurations; ++i) {
+        printf("    duration %d: %d\n", i, durations[i]);
+        // configurations[i].size() == _num_hosts.
+        for (int dst = 0; dst < configurations[i].size(); ++dst) {
+            // configurations[i][dst] is the src for this dst.
+            printf("    %d -> %d\n", configurations[i][dst], dst);
+        }
+    }
+
     // cleanup from previous run during a new schedule roll over
     if (new_s && resize) {
         bool *qbig = (bool *)malloc(sizeof(bool) * _num_hosts * _num_hosts);
@@ -254,34 +266,56 @@ RunSchedule::execute_schedule(ErrorHandler *)
         free(qbig);
     }
 
-    // turn on / off packet switch for special case schedules
-    // (e.g., circuit only, packet only)
-    // and during a schedule roll over
+    // Turn on/off the packet switch for special case schedules (e.g., circuit
+    // only, packet only) and during a schedule roll over. I.e., only do this
+    // if there is a new schedule or there is only a single configuration.
     if (new_s || num_configurations == 1) {
+        // For each dst...
         for(int dst = 0; dst < _num_hosts; dst++) {
+            // Check if each src has a circuit with that dst.
             for(int src = 0; src < _num_hosts; src++) {
-                // packet off only if this (src, dst) pair has circuit
+                // Look at the first configuration. Turn off the packet switch
+                // if this (src, dst) pair has circuit.
                 int val = configurations[0][dst] == src ? -1 : 0;
                 _packet_pull_switch[src * _num_hosts + dst]->call_write(String(val));
             }
         }
     }
 
-
     // for each configuration in schedule
     for(int m = 0; m < num_configurations; m++) {
+        printf("current configuration:\n");
+        printf("  duration %d: %d\n", i, durations[i]);
+        for (int dst = 0; j < configurations[m].size(); ++dst) {
+            printf("  %d -> %d\n", configurations[i][dst], dst);
+        }
+
         // set configuration
         for(int dst = 0; dst < _num_hosts; dst++) {
             int src = configurations[m][dst];
-            _pull_switch[dst]->call_write(String(src));
+            _circuit_pull_switch[dst]->call_write(String(src));
+            printf("  enabled circuit for: %d -> %d\n", src, dst);
 
+            // If the circuit to this dst is disabled and there are more than
+            // one configuration, then this must be a circuit night. Disable
+            // the packet switch during the circuit night for the next
+            // (src, dst) pair, since that next src is being configured. Note
+            // that the way that this if-check is written implies that no
+            // configuration will contain "-1"s unless that configuration is for
+            // a circuit night.
             if (src == -1 && num_configurations > 1) {
-                int next_src = configurations[(m+1) % num_configurations][dst];
+                // This is the next src to connect to this dst. Since it is part
+                // of the reconfiguration, its packet network should be
+                // disabled.
+                int next_src = configurations[(m + 1) % num_configurations][dst];
                 _packet_pull_switch[next_src * _num_hosts + dst]->
                     call_write(String(-1));
+                printf(("  circuit night. disabled packet switch for next " +
+                        "configuration: %d -> %d"), next_src, dst);
             }
         }
 
+        // Log the new configuration.
         char conf[500];
         bzero(conf, 500);
         for (int i = 0; i < configurations[m].size(); i++) {
@@ -290,42 +324,63 @@ RunSchedule::execute_schedule(ErrorHandler *)
         conf[strlen(conf)-1] = 0;
         _log_config->call_write(String(conf));
 
-        // wait duration
         long long elapsed_nano = 0;
         struct timespec ts_new;
-        while (elapsed_nano < durations[m] * 1e3) { // duration in microseconds
+        // Loop until the duration of the current configuration has passed. The
+        // target duration is in microseconds, so it must be multiplied by 1e3
+        // to convert it to nanoseconds. Note: This is a busy-wait loop.
+        while (elapsed_nano < durations[m] * 1e3) {
             clock_gettime(CLOCK_MONOTONIC, &ts_new);
             long long current_nano = 1e9 * ts_new.tv_sec + ts_new.tv_nsec;
 
+            // If the current time has past the time at which the next proactive
+            // buffer resizing is supposed to happen...
             if (current_nano > _next_time) {
                 // set ECE
                 char ecem[500];
                 bzero(ecem, 500);
                 int q = 0;
-                int remaining = in_advance + elapsed_nano / 1e3;
-                for(int k = 0; remaining >= 0; k++) {
+                // The time remaining in this configuration is
+                int remaining_us = in_advance + elapsed_nano / 1e3;
+                // While there is time remaining, step through the upcoming
+                // configurations.
+                for(int k = 0; remaining_us >= 0; k++) {
+                    int future_cnf = (m + k) % num_configurations
+                    // For each dst...
                     for(int dst = 0; dst < _num_hosts; dst++) {
-                        int src = configurations[(m+k) % num_configurations][dst];
-                        if (src == -1)
+                        // Extract the future src for this dst.
+                        int future_src = configurations[future_cnf][dst];
+                        // If the circuit is disabled for this future
+                        // configuration, then skip to the next configuration.
+                        if (future_src == -1)
                             continue;
-                        ecem[q] = src + 1 + '0';
-                        ecem[q+1] = dst + 1 + '0';
-                        ecem[q+2] = ' ';
+
+                        ecem[q] = future_src + 1 + '0';
+                        ecem[q + 1] = dst + 1 + '0';
+                        ecem[q + 2] = ' ';
                         q += 3;
 
-                        if(resize) { // make the next few days buffer big
-                            _queue_capacity[src * _num_hosts + dst]->
+                        if (resize) {
+                            // Increase the buffer size in advance of this
+                            // future circuit.
+                            //
+                            // Make the buffer for this (future_src, dst) pair
+                            // larger.
+                            _queue_capacity[future_src * _num_hosts + dst]->
                                 call_write(String(big_size));
-                            _queue_marking_thresh[src * _num_hosts + dst]->
+                            _queue_marking_thresh[future_src * _num_hosts + dst]->
                                 call_write(String(big_thresh));
                         }
                     }
-                    remaining -= durations[(m+k) % num_configurations];
+                    // Reduce the remaining time by the duration of this future
+                    // configuration.
+                    remaining_us -= durations[future_cnf];
                 }
                 _ece_map->call_write(String(ecem));
-                _next_time = current_nano - remaining * 1e3;
+                // The next proactive resizing
+                _next_time = current_nano - remaining_us * 1e3;
             }
-
+            // Compute the time since the hybrid switch was created.
             elapsed_nano = (1e9 * ts_new.tv_sec + ts_new.tv_nsec)
                 - (1e9 * _start_time.tv_sec + _start_time.tv_nsec);
         }
