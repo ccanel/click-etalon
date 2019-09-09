@@ -224,17 +224,17 @@ RunSchedule::execute_schedule(ErrorHandler *)
         j++;
     }
 
-    // Print configurations.
-    printf("all configurations:\n");
-    printf("  num_configurations: %d\n", num_configurations);
-    for (int i = 0; i < num_configurations; ++i) {
-        printf("    duration %d: %d\n", i, durations[i]);
-        // configurations[i].size() == _num_hosts.
-        for (int dst = 0; dst < configurations[i].size(); ++dst) {
-            // configurations[i][dst] is the src for this dst.
-            printf("    %d -> %d\n", configurations[i][dst], dst);
-        }
-    }
+    // // Print configurations.
+    // printf("all configurations:\n");
+    // printf("  num_configurations: %d\n", num_configurations);
+    // for (int i = 0; i < num_configurations; ++i) {
+    //     printf("    duration %d: %d\n", i, durations[i]);
+    //     // configurations[i].size() == _num_hosts.
+    //     for (int dst = 0; dst < configurations[i].size(); ++dst) {
+    //         // configurations[i][dst] is the src for this dst.
+    //         printf("    %d -> %d\n", configurations[i][dst], dst);
+    //     }
+    // }
 
     // cleanup from previous run during a new schedule roll over
     if (new_s && resize) {
@@ -284,17 +284,17 @@ RunSchedule::execute_schedule(ErrorHandler *)
 
     // for each configuration in schedule
     for(int m = 0; m < num_configurations; m++) {
-        printf("current configuration:\n");
-        printf("  duration %d: %d\n", i, durations[i]);
-        for (int dst = 0; j < configurations[m].size(); ++dst) {
-            printf("  %d -> %d\n", configurations[i][dst], dst);
-        }
+        // printf("current configuration:\n");
+        // printf("  duration %d: %d\n", i, durations[i]);
+        // for (int dst = 0; j < configurations[m].size(); ++dst) {
+        //     printf("  %d -> %d\n", configurations[i][dst], dst);
+        // }
 
         // set configuration
         for(int dst = 0; dst < _num_hosts; dst++) {
             int src = configurations[m][dst];
             _circuit_pull_switch[dst]->call_write(String(src));
-            printf("  enabled circuit for: %d -> %d\n", src, dst);
+            // printf("  enabled circuit for: %d -> %d\n", src, dst);
 
             // If the circuit to this dst is disabled and there are more than
             // one configuration, then this must be a circuit night. Disable
@@ -310,8 +310,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 int next_src = configurations[(m + 1) % num_configurations][dst];
                 _packet_pull_switch[next_src * _num_hosts + dst]->
                     call_write(String(-1));
-                printf(("  circuit night. disabled packet switch for next " +
-                        "configuration: %d -> %d"), next_src, dst);
+                // printf(("  circuit night. disabled packet switch for next " +
+                //         "configuration: %d -> %d"), next_src, dst);
             }
         }
 
@@ -340,7 +340,6 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 char ecem[5500];
                 bzero(ecem, 5500);
                 int q = 0;
-                // The time remaining in this configuration is
                 int remaining_us = in_advance + elapsed_nano / 1e3;
                 // While there is time remaining, step through the upcoming
                 // configurations.
@@ -380,7 +379,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 // The next proactive resizing
                 _next_time = current_nano - remaining_us * 1e3;
             }
-            // Compute the time since the hybrid switch was created.
+            // Compute the time since the end of the last configuration.
             elapsed_nano = (1e9 * ts_new.tv_sec + ts_new.tv_nsec)
                 - (1e9 * _start_time.tv_sec + _start_time.tv_nsec);
         }
