@@ -344,7 +344,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 // While there is time remaining, step through the upcoming
                 // configurations.
                 for(int k = 0; remaining_us >= 0; k++) {
-                    int future_cnf = (m + k) % num_configurations
+                    int future_cnf = (m + k) % num_configurations;
                     // For each dst...
                     for(int dst = 0; dst < _num_hosts; dst++) {
                         // Extract the future src for this dst.
