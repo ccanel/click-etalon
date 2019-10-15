@@ -45,7 +45,7 @@ private:
     int open_log(const char *);
     FILE *_fp;
     int *current_circuits;
-    int _num_hosts;
+    int _num_racks;
     bool _enabled;
     atomic_uint32_t _xfile_access;
     hsl_s *circuit_event_buffer;

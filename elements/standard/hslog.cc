@@ -33,10 +33,10 @@ int
 HSLog::configure(Vector<String> &conf, ErrorHandler *errh)
 {
     if (Args(conf, this, errh)
-        .read_mp("NUM_HOSTS", _num_hosts)
+        .read_mp("NUM_RACKS", _num_racks)
         .complete() < 0)
         return -1;
-    if (_num_hosts == 0)
+    if (_num_racks == 0)
         return -1;
     _fp = NULL;
     return 0;
@@ -45,14 +45,14 @@ HSLog::configure(Vector<String> &conf, ErrorHandler *errh)
 int
 HSLog::initialize(ErrorHandler*)
 {
-    current_circuits = (int *)malloc(sizeof(int) * (_num_hosts + 1));
-    for (int i = 0; i < _num_hosts + 1; i++) {
+    current_circuits = (int *)malloc(sizeof(int) * (_num_racks + 1));
+    for (int i = 0; i < _num_racks + 1; i++) {
         current_circuits[i] = 0;
     }
 
-    circuit_event_buffer = (hsl_s *)malloc(sizeof(hsl_s) * _num_hosts * 2);
-    bzero(circuit_event_buffer, sizeof(hsl_s) * _num_hosts * 2);
-    
+    circuit_event_buffer = (hsl_s *)malloc(sizeof(hsl_s) * _num_racks * 2);
+    bzero(circuit_event_buffer, sizeof(hsl_s) * _num_racks * 2);
+
     if (open_log("/tmp/hslog.log"))
     	return 1;
     return 0;
@@ -135,12 +135,12 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 {
     HSLog *hsl = static_cast<HSLog *>(e);
     if (hsl->_enabled) {
-	int hosts = hsl->_num_hosts + 1;
+	int racks = hsl->_num_racks + 1;
 	Timestamp now;
 	now.assign_now();
 	int nmemb = 0;
 	hsl_s *msg;
-	for(int dst = 1; dst < hosts; dst++) {
+	for(int dst = 1; dst < racks; dst++) {
 	    int src = hsl->current_circuits[dst];
 	    if (src != 0) {
 		msg = &(hsl->circuit_event_buffer[nmemb]);
@@ -152,7 +152,7 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 	    }
 	}
 	Vector<String> c = HSLog::split(str, '/');
-	for(int dst = 1; dst < hosts; dst++) {
+	for(int dst = 1; dst < racks; dst++) {
 	    int src = atoi(c[dst-1].c_str()) + 1;
 	    hsl->current_circuits[dst] = src;
 	    if (src != 0) {
