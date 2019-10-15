@@ -43,7 +43,7 @@ HSLog::configure(Vector<String> &conf, ErrorHandler *errh)
 }
 
 int
-HSLog::initialize(ErrorHandler*)
+HSLog::initialize(ErrorHandler *errh)
 {
     current_circuits = (int *)malloc(sizeof(int) * (_num_racks + 1));
     for (int i = 0; i < _num_racks + 1; i++) {
@@ -52,6 +52,19 @@ HSLog::initialize(ErrorHandler*)
 
     circuit_event_buffer = (hsl_s *)malloc(sizeof(hsl_s) * _num_racks * 2);
     bzero(circuit_event_buffer, sizeof(hsl_s) * _num_racks * 2);
+
+    _voq_len = (HandlerCall **)malloc(
+        sizeof(HandlerCall *) * _num_racks * _num_racks);
+    for(int src = 0; src < _num_racks; ++src) {
+        for(int dst = 0; dst < _num_racks; ++dst) {
+            char voq_len_h[500];
+            sprintf(voq_len_h, "hybrid_switch/q%d%d/q.length", src + 1,
+                    dst + 1);
+            HandlerCall *call = new HandlerCall(voq_len_h);
+            call->initialize(HandlerCall::f_read, this, errh);
+            _voq_len[src * _num_racks + dst] = call;
+        }
+    }
 
     if (open_log("/tmp/hslog.log"))
     	return 1;
@@ -86,6 +99,14 @@ HSLog::simple_action(Packet *p)
 	latency *= 1e6;
 	latency /= 20;  // TDF
 	msg.latency = (int)latency;
+
+        auto *ip_h = p->ip_header();
+        uint32_t rack_mask = 0x0000ff00;
+        // Mask and shift right to extract rack numbers. Subtract 1 to convert
+        // from 1-indexed to 0-indexed.
+        uint32_t src = ((ip_h->ip_src.s_addr & rack_mask) >> 4) - 1;
+        uint32_t dst = ((ip_h->ip_dst.s_addr & rack_mask) >> 4) - 1;
+        msg.voq_len = atoi(_voq_len[src * _num_racks + dst]->call_read().c_str());
 
 	memcpy(msg.data, p->data(), 64);
 	do {

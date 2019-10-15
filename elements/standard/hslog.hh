@@ -21,6 +21,7 @@ typedef struct {
     int latency;
     int src;
     int dst;
+    int voq_len;
     char data[64];
 } hsl_s;
 
@@ -49,6 +50,8 @@ private:
     bool _enabled;
     atomic_uint32_t _xfile_access;
     hsl_s *circuit_event_buffer;
+    // Handlers for querying current VOQ length, one for each rack pair.
+    HandlerCall **_voq_len;
 };
 
 CLICK_ENDDECLS
