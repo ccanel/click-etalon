@@ -84,7 +84,7 @@ HSLog::simple_action(Packet *p)
 	float latency = strtof((now - CONST_FIRST_TIMESTAMP_ANNO(p)).unparse().c_str(),
 			       NULL);
 	latency *= 1e6;
-	latency /= 20; // TDF
+	latency /= 20;  // TDF
 	msg.latency = (int)latency;
 
 	memcpy(msg.data, p->data(), 64);

@@ -34,7 +34,7 @@ class HSLog : public Element { public:
     int initialize(ErrorHandler *errh);
     int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
     void add_handlers() CLICK_COLD;
-    
+
     Packet *simple_action(Packet *);
 
 private:
