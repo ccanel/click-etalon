@@ -21,6 +21,7 @@
 #include "hslog.hh"
 #include <click/packet_anno.hh>
 #include <click/args.hh>
+// #include <click/ipaddress.hh>
 CLICK_DECLS
 
 HSLog::HSLog()
@@ -101,12 +102,16 @@ HSLog::simple_action(Packet *p)
 	msg.latency = (int)latency;
 
         auto *ip_h = p->ip_header();
-        uint32_t rack_mask = 0x0000ff00;
+        // printf("src addr: %d\n", ip_h->ip_src.s_addr);
+        // printf("src addr: %s\n", IPAddress(ip_h->ip_src).unparse().c_str());
         // Mask and shift right to extract rack numbers. Subtract 1 to convert
         // from 1-indexed to 0-indexed.
-        uint32_t src = ((ip_h->ip_src.s_addr & rack_mask) >> 4) - 1;
-        uint32_t dst = ((ip_h->ip_dst.s_addr & rack_mask) >> 4) - 1;
+        uint32_t rack_mask = 0x0000ff00;
+        uint32_t src = ((ntohl(ip_h->ip_src.s_addr) & rack_mask) >> 8) - 1;
+        uint32_t dst = ((ntohl(ip_h->ip_dst.s_addr) & rack_mask) >> 8) - 1;
+        // printf("src: %u, dst: %u\n", src + 1, dst + 1);
         msg.voq_len = atoi(_voq_len[src * _num_racks + dst]->call_read().c_str());
+        // printf("voq len: %d\n", msg.voq_len);
 
 	memcpy(msg.data, p->data(), 64);
 	do {
