@@ -101,17 +101,16 @@ HSLog::simple_action(Packet *p)
 	latency /= 20;  // TDF
 	msg.latency = (int)latency;
 
+        // Calculate which VOQ the packet will pass (or did pass) through and
+        // query its length.
         auto *ip_h = p->ip_header();
-        // printf("src addr: %d\n", ip_h->ip_src.s_addr);
-        // printf("src addr: %s\n", IPAddress(ip_h->ip_src).unparse().c_str());
-        // Mask and shift right to extract rack numbers. Subtract 1 to convert
-        // from 1-indexed to 0-indexed.
+        // Mask and shift right to extract rack numbers. Rack numbers are the
+        // third octet. Use ntohl() to convert from network byte order to host
+        // byte order. Subtract 1 to convert from 1-indexed to 0-indexed.
         uint32_t rack_mask = 0x0000ff00;
         uint32_t src = ((ntohl(ip_h->ip_src.s_addr) & rack_mask) >> 8) - 1;
         uint32_t dst = ((ntohl(ip_h->ip_dst.s_addr) & rack_mask) >> 8) - 1;
-        // printf("src: %u, dst: %u\n", src + 1, dst + 1);
         msg.voq_len = atoi(_voq_len[src * _num_racks + dst]->call_read().c_str());
-        // printf("voq len: %d\n", msg.voq_len);
 
 	memcpy(msg.data, p->data(), 64);
 	do {
@@ -174,6 +173,7 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 		strncpy(msg->ts, now.unparse().c_str(), 31);
 		msg->src = src;
 		msg->dst = dst;
+                msg->voq_len = 0;
 		nmemb++;
 	    }
 	}
@@ -187,6 +187,7 @@ HSLog::set_circuit_event(const String &str, Element *e, void *, ErrorHandler *)
 		strncpy(msg->ts, now.unparse().c_str(), 31);
 		msg->src = src;
 		msg->dst = dst;
+                msg->voq_len = 0;
 		nmemb++;
 	    }
 	}
