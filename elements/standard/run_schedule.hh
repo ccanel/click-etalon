@@ -41,21 +41,26 @@ class RunSchedule : public Element {
     pthread_mutex_t lock;
 
   private:
-
     static int set_schedule_handler(const String&, Element*, void*, ErrorHandler*);
     static int resize_handler(const String&, Element*, void*, ErrorHandler*);
     static int in_advance_handler(const String&, Element*, void*, ErrorHandler*);
+    static int set_queue_cap(int* cap, int* thresh, const String &which);
+    static int set_small_queue_cap(const String&, Element*, void*, ErrorHandler*);
+    static int get_small_queue_cap(const String&, Element*, void*, ErrorHandler*);
+    static int set_big_queue_cap(const String&, Element*, void*, ErrorHandler*);
+    static int get_big_queue_cap(const String&, Element*, void*, ErrorHandler*);
+    static bool validate_cap(int cap);
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
     bool new_sched;
     Task _task;
     int _num_hosts;
-    int _big_buffer_size;
-    int _small_buffer_size;
-    int _big_marking_thresh;
+    int _small_queue_cap;
+    int _big_queue_cap;
     int _small_marking_thresh;
-    HandlerCall **_queue_capacity;
+    int _big_marking_thresh;
+    HandlerCall **_queue_cap;
     HandlerCall **_queue_marking_thresh;
     HandlerCall **_circuit_pull_switch;
     HandlerCall **_packet_pull_switch;

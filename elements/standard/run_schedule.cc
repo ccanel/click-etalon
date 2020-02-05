@@ -27,7 +27,8 @@
 CLICK_DECLS
 
 RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
-                             _big_buffer_size(128), _small_buffer_size(16),
+                             _small_queue_cap(16), _big_queue_cap(128),
+                             _small_marking_thresh(1000),
                              _big_marking_thresh(1000),
                              _small_marking_thresh(1000), _print(0),
                              _in_advance(12000), _next_time(0)
@@ -62,19 +63,8 @@ RunSchedule::initialize(ErrorHandler *errh)
     // VOQ handlers
     _queue_marking_thresh = (HandlerCall **)malloc(sizeof(HandlerCall *) *
                                                    _num_hosts * _num_hosts);
-    _queue_capacity = (HandlerCall **)malloc(sizeof(HandlerCall *) *
-                                             _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
-            char resize_cap_h[500];
-            sprintf(resize_cap_h, "hybrid_switch/q%d%d/q.resize_capacity",
-                    src+1, dst+1);
-            _queue_capacity[src * _num_hosts + dst] =
-                new HandlerCall(resize_cap_h);
-            _queue_capacity[src * _num_hosts + dst]->
-                initialize(HandlerCall::f_read | HandlerCall::f_write, this,
-                           errh);
-
             char marking_thresh_h[500];
             sprintf(marking_thresh_h,
                 "hybrid_switch/q%d%d/q.marking_threshold", src+1, dst+1);
@@ -131,22 +121,17 @@ RunSchedule::set_schedule_handler(const String &str, Element *e, void *,
 }
 
 int
-RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler *)
+RunSchedule::resize_handler(const String &str, Element *e, void *,
+                            ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
 
     pthread_mutex_lock(&(rs->lock));
     BoolArg::parse(str, rs->do_resize, ArgContext());
     if (rs->do_resize) {
-        // get sizes based on queues sizes
-        rs->_small_buffer_size = atoi(rs->_queue_capacity[0]->call_read().c_str());
-        rs->_big_buffer_size = rs->_small_buffer_size * 8;
-        rs->_small_marking_thresh = atoi(rs->_queue_marking_thresh[0]->call_read().c_str());
-        rs->_big_marking_thresh = rs->_small_marking_thresh * 8;
-
-        printf("auto resizing: %d -> %d\n", rs->_small_buffer_size,
-               rs->_big_buffer_size);
-        printf("auto resizing marking thresh: %d -> %d\n",
+        printf("enabled auto resizing: %d -> %d packets\n",
+               rs->_small_queue_cap, rs->_big_queue_cap);
+        printf("enabled auto resizing marking threshold: %d -> %d packets\n",
                rs->_small_marking_thresh, rs->_big_marking_thresh);
     }
     pthread_mutex_unlock(&(rs->lock));
@@ -154,14 +139,73 @@ RunSchedule::resize_handler(const String &str, Element *e, void *, ErrorHandler 
 }
 
 int
-RunSchedule::in_advance_handler(const String &str, Element *e, void *, ErrorHandler *)
+RunSchedule::in_advance_handler(const String &str, Element *e, void *,
+                                ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-
     pthread_mutex_lock(&(rs->lock));
     rs->_in_advance = atoi(str.c_str());
     pthread_mutex_unlock(&(rs->lock));
     return 0;
+}
+
+
+int
+RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
+                           const String &new_cap_str, const String &which)
+{
+    int new_cap;
+    IntArg::parse(new_cap_str, new_cap, ArgContext());
+    if (!validate_cap(new_cap)) {
+        return -1;
+    }
+
+    pthread_mutex_lock(&(rs->lock));
+    *old_cap = new_cap;
+    // Use the ratio of the old threshold to the old capacity to determine the
+    // new threshold from the new capacity.
+    *old_thresh = (int) ((((float) *old_thresh)  / *old_cap) * new_cap);
+    pthread_mutex_unlock(&(rs->lock));
+
+    printf("configured %s queue capacity to: %d\n", which, new_cap);
+    printf("configured %s marking threshold to: %d\n", which, new_thresh);
+    return 0;
+}
+
+int
+RunSchedule::set_small_queue_cap(const String &str, Element *e, void *,
+                           ErrorHandler *)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    set_queue_cap(rs, rs->_small_queue_cap, rs->_small_marking_thresh, str,
+                  which="small")
+}
+
+String
+RunSchedule::get_small_queue_cap(Element *e, void *)
+{
+    return String(static_cast<RunSchedule *>(e)->_small_queue_cap);
+}
+
+int
+RunSchedule::set_big_queue_cap(const String &str, Element *e, void *,
+                           ErrorHandler *)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    set_queue_cap(rs, rs->_big_queue_cap, rs->_big_marking_thresh, str,
+                  which="big")
+}
+
+String
+RunSchedule::get_big_queue_cap(Element *e, void *)
+{
+    return String(static_cast<RunSchedule *>(e)->_big_queue_cap);
+}
+
+bool
+RunSchedule::validate_cap(int cap)
+{
+    return cap > 0;
 }
 
 Vector<String>
@@ -189,8 +233,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
     pthread_mutex_lock(&lock);
     String current_schedule = String(next_schedule);
     bool resize = do_resize;
-    int small_size = _small_buffer_size;
-    int big_size = _big_buffer_size;
+    int small_cap = _small_queue_cap;
+    int big_cap = _big_queue_cap;
     int small_thresh = _small_marking_thresh;
     int big_thresh = _big_marking_thresh;
     int in_advance = _in_advance;
@@ -247,7 +291,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
                 int src = configurations[k % num_configurations][dst];
                 if (src == -1)
                     continue;
-                _queue_capacity[src * _num_hosts + dst]->call_write(String(big_size));
+                _queue_cap[src * _num_hosts + dst]->call_write(String(big_cap));
                 _queue_marking_thresh[src * _num_hosts + dst]->call_write(String(big_thresh));
                 qbig[src * _num_hosts + dst] = true;
             }
@@ -256,8 +300,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
         for(int dst = 0; dst < _num_hosts; dst++) {
             for(int src = 0; src < _num_hosts; src++) {
                 if(!qbig[src * _num_hosts + dst]) {
-                    _queue_capacity[src * _num_hosts + dst]->
-                        call_write(String(small_size));
+                    _queue_cap[src * _num_hosts + dst]->
+                        call_write(String(small_cap));
                     _queue_marking_thresh[src * _num_hosts + dst]->
                         call_write(String(small_thresh));
                 }
@@ -365,8 +409,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
                             //
                             // Make the buffer for this (future_src, dst) pair
                             // larger.
-                            _queue_capacity[future_src * _num_hosts + dst]->
-                                call_write(String(big_size));
+                            _queue_cap[future_src * _num_hosts + dst]->
+                                call_write(String(big_cap));
                             _queue_marking_thresh[future_src * _num_hosts + dst]->
                                 call_write(String(big_thresh));
                         }
@@ -411,8 +455,8 @@ RunSchedule::execute_schedule(ErrorHandler *)
                     remaining -= durations[(m+k) % num_configurations];
                 }
                 if (not_found) {
-                    _queue_capacity[src * _num_hosts + dst]->
-                        call_write(String(small_size));
+                    _queue_cap[src * _num_hosts + dst]->
+                        call_write(String(small_cap));
                     _queue_marking_thresh[src * _num_hosts + dst]->
                         call_write(String(small_thresh));
                 }
@@ -446,6 +490,10 @@ RunSchedule::add_handlers()
     add_write_handler("setSchedule", set_schedule_handler, 0);
     add_write_handler("setDoResize", resize_handler, 0);
     add_write_handler("setInAdvance", in_advance_handler, 0);
+    add_write_handler("small_queue_capacity", set_small_queue_cap, 0);
+    add_read_handler("small_queue_capacity", get_small_queue_cap, 0);
+    add_write_handler("big_queue_capacity", set_big_queue_cap, 0);
+    add_read_handler("big_queue_capacity", get_big_queue_cap, 0);
 }
 
 CLICK_ENDDECLS
