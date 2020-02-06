@@ -29,8 +29,7 @@ CLICK_DECLS
 RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
                              _small_queue_cap(16), _big_queue_cap(128),
                              _small_marking_thresh(1000),
-                             _big_marking_thresh(1000),
-                             _small_marking_thresh(1000), _print(0),
+                             _big_marking_thresh(1000), _print(0),
                              _in_advance(12000), _next_time(0)
 {
     pthread_mutex_init(&lock, NULL);
@@ -154,31 +153,34 @@ int
 RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
                            const String &new_cap_str, const String &which)
 {
-    int new_cap;
-    IntArg::parse(new_cap_str, new_cap, ArgContext());
-    if (!validate_cap(new_cap)) {
-        return -1;
+    int new_cap = 0;
+    if (!IntArg().parse(new_cap_str, new_cap) || !validate_cap(new_cap)) {
+	printf("error parsing new %s capacity: %s\n", which.c_str(),
+	       new_cap_str.c_str());
+	return -1;
     }
 
     pthread_mutex_lock(&(rs->lock));
     *old_cap = new_cap;
     // Use the ratio of the old threshold to the old capacity to determine the
     // new threshold from the new capacity.
-    *old_thresh = (int) ((((float) *old_thresh)  / *old_cap) * new_cap);
+    int new_thresh = (int) ((((float) *old_thresh)  / *old_cap) * new_cap);
+    *old_thresh = new_thresh;
     pthread_mutex_unlock(&(rs->lock));
 
-    printf("configured %s queue capacity to: %d\n", which, new_cap);
-    printf("configured %s marking threshold to: %d\n", which, new_thresh);
+    printf("configured %s queue capacity to: %d\n", which.c_str(), new_cap);
+    printf("configured %s marking threshold to: %d\n", which.c_str(),
+	   new_thresh);
     return 0;
 }
 
 int
 RunSchedule::set_small_queue_cap(const String &str, Element *e, void *,
-                           ErrorHandler *)
+				 ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    set_queue_cap(rs, rs->_small_queue_cap, rs->_small_marking_thresh, str,
-                  which="small")
+    return set_queue_cap(rs, &(rs->_small_queue_cap),
+			 &(rs->_small_marking_thresh), str, "small");
 }
 
 String
@@ -189,11 +191,11 @@ RunSchedule::get_small_queue_cap(Element *e, void *)
 
 int
 RunSchedule::set_big_queue_cap(const String &str, Element *e, void *,
-                           ErrorHandler *)
+			       ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    set_queue_cap(rs, rs->_big_queue_cap, rs->_big_marking_thresh, str,
-                  which="big")
+    return set_queue_cap(rs, &(rs->_big_queue_cap), &(rs->_big_marking_thresh),
+			 str, "big");
 }
 
 String
