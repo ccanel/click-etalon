@@ -154,8 +154,8 @@ RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
 			   const String &new_cap_str, const String &which_cap)
 {
     int new_cap = 0;
-    if (!IntArg().parse(new_cap_str, new_cap) || !validate_cap(new_cap)) {
-	printf("error parsing new %s queue capacity: %s\n", which_cap.c_str(),
+    if (!IntArg().parse(new_cap_str, new_cap) || new_cap <= 0) {
+	printf("error parsing new %s VOQ capacity: %s\n", which_cap.c_str(),
 	       new_cap_str.c_str());
 	return -1;
     }
@@ -231,12 +231,6 @@ String
 RunSchedule::get_big_queue_cap(Element *e, void *)
 {
     return String(static_cast<RunSchedule *>(e)->_big_queue_cap);
-}
-
-bool
-RunSchedule::validate_cap(int cap)
-{
-    return cap > 0;
 }
 
 Vector<String>

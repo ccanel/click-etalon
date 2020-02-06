@@ -50,7 +50,6 @@ class RunSchedule : public Element {
     static String get_small_queue_cap(Element*, void*);
     static int set_big_queue_cap(const String&, Element*, void*, ErrorHandler*);
     static String get_big_queue_cap(Element*, void*);
-    static bool validate_cap(int cap);
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
