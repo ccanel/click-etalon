@@ -151,12 +151,28 @@ RunSchedule::in_advance_handler(const String &str, Element *e, void *,
 
 int
 RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
-                           const String &new_cap_str, const String &which)
+			   bool cmp(int, int), int cmp_cap,
+			   const String &new_cap_str, const String &which)
 {
+    String other;
+    if (which == "small") {
+	other = "big";
+    } else if (which == "big") {
+	other = "small";
+    } else {
+	printf("malformed parameter 'which': %s\n", which.c_str());
+	return -1;
+    }
+
     int new_cap = 0;
     if (!IntArg().parse(new_cap_str, new_cap) || !validate_cap(new_cap)) {
-	printf("error parsing new %s capacity: %s\n", which.c_str(),
+	printf("error parsing new %s queue capacity: %s\n", which.c_str(),
 	       new_cap_str.c_str());
+	return -1;
+    }
+    if (!cmp(new_cap, cmp_cap)) {
+	printf(("error setting %s queue capacity to %d when %s queue capacity "
+	       "is %d"), which.c_str(), new_cap, other.c_str(), cmp_cap);
 	return -1;
     }
 
@@ -179,8 +195,12 @@ RunSchedule::set_small_queue_cap(const String &str, Element *e, void *,
 				 ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    return set_queue_cap(rs, &(rs->_small_queue_cap),
-			 &(rs->_small_marking_thresh), str, "small");
+    auto cmp = [](int new_small_queue_cap, int big_queue_cap) {
+	return new_small_queue_cap <= big_queue_cap;
+    };
+    return set_queue_cap(
+	rs, &(rs->_small_queue_cap), &(rs->_small_marking_thresh), cmp,
+	rs->_big_queue_cap, str, "small");
 }
 
 String
@@ -194,8 +214,12 @@ RunSchedule::set_big_queue_cap(const String &str, Element *e, void *,
 			       ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    return set_queue_cap(rs, &(rs->_big_queue_cap), &(rs->_big_marking_thresh),
-			 str, "big");
+    auto cmp = [](int new_big_queue_cap, int small_queue_cap) {
+	return small_queue_cap <= new_big_queue_cap;
+    };
+    return set_queue_cap(
+	rs, &(rs->_big_queue_cap), &(rs->_big_marking_thresh), cmp,
+	rs->_small_queue_cap, str, "big");
 }
 
 String
@@ -249,7 +273,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     if (!_print) {
         if (current_schedule) {
             printf("running sched - %s\n", current_schedule.c_str());
-	    printf("VOQ capacities -  small: %d -> large: %d\n",
+	    printf("VOQ capacities - small: %d -> big: %d\n",
 		   _small_queue_cap, _big_queue_cap);
 	}
     }
