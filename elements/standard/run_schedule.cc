@@ -61,10 +61,20 @@ RunSchedule::initialize(ErrorHandler *errh)
 #endif
 
     // VOQ handlers
+    _queue_cap = (HandlerCall **)malloc(sizeof(HandlerCall *) *
+					_num_hosts * _num_hosts);
     _queue_marking_thresh = (HandlerCall **)malloc(sizeof(HandlerCall *) *
                                                    _num_hosts * _num_hosts);
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
+	    char resize_cap_h[500];
+	    sprintf(resize_cap_h, "hybrid_switch/q%d%d/q.resize_capacity",
+                    src+1, dst+1);
+            _queue_cap[src * _num_hosts + dst] = new HandlerCall(resize_cap_h);
+            _queue_cap[src * _num_hosts + dst]->
+                initialize(HandlerCall::f_read | HandlerCall::f_write, this,
+                           errh);
+
             char marking_thresh_h[500];
             sprintf(marking_thresh_h,
                 "hybrid_switch/q%d%d/q.marking_threshold", src+1, dst+1);
