@@ -128,7 +128,7 @@ RunSchedule::resize_handler(const String &str, Element *e, void *,
     pthread_mutex_lock(&(rs->lock));
     BoolArg::parse(str, rs->do_resize, ArgContext());
     if (rs->do_resize) {
-        printf("enabled auto resizing: %d -> %d packets\n",
+        printf("enabled auto resizing VOQ capacity: %d -> %d packets\n",
                rs->_small_queue_cap, rs->_big_queue_cap);
         printf("enabled auto resizing marking threshold: %d -> %d packets\n",
                rs->_small_marking_thresh, rs->_big_marking_thresh);
@@ -184,8 +184,8 @@ RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
 	return -1;
     }
     if (s_cap > b_cap) {
-	printf(("error setting %s queue capacity to %d when the current %s "
-		"queue capacity is %d"), which_cap.c_str(), new_cap,
+	printf(("error setting %s VOQ capacity to %d when the current %s VOQ "
+		"capacity is %d\n"), which_cap.c_str(), new_cap,
 	       other_str.c_str(), other_cap);
 	return -1;
     }
@@ -197,7 +197,7 @@ RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
     *old_thresh = new_thresh;
     pthread_mutex_unlock(&(rs->lock));
 
-    printf("configured %s queue capacity to: %d\n", which_cap.c_str(), new_cap);
+    printf("configured %s VOQ capacity to: %d\n", which_cap.c_str(), new_cap);
     printf("configured %s marking threshold to: %d\n", which_cap.c_str(),
 	   new_thresh);
     return 0;
