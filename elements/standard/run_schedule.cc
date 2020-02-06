@@ -151,32 +151,45 @@ RunSchedule::in_advance_handler(const String &str, Element *e, void *,
 
 int
 RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
-			   bool cmp(int, int), int cmp_cap,
-			   const String &new_cap_str, const String &which)
+			   const String &new_cap_str, const String &which_cap)
 {
-    String other;
-    if (which == "small") {
-	other = "big";
-    } else if (which == "big") {
-	other = "small";
-    } else {
-	printf("malformed parameter 'which': %s\n", which.c_str());
-	return -1;
-    }
-
     int new_cap = 0;
     if (!IntArg().parse(new_cap_str, new_cap) || !validate_cap(new_cap)) {
-	printf("error parsing new %s queue capacity: %s\n", which.c_str(),
+	printf("error parsing new %s queue capacity: %s\n", which_cap.c_str(),
 	       new_cap_str.c_str());
-	return -1;
-    }
-    if (!cmp(new_cap, cmp_cap)) {
-	printf(("error setting %s queue capacity to %d when %s queue capacity "
-	       "is %d"), which.c_str(), new_cap, other.c_str(), cmp_cap);
 	return -1;
     }
 
     pthread_mutex_lock(&(rs->lock));
+    // Verify that the new queue capacity is in the valid range. A new small
+    // queue capacity must be smaller than the current big queue capacity and a
+    // new big queue capacity must be larger than the current small queue
+    // capacity.
+    int s_cap;
+    int b_cap;
+    int other_cap;
+    String other_str;
+    if (which_cap == "small") {
+	s_cap = new_cap;
+	b_cap = rs->_big_queue_cap;
+	other_cap = b_cap;
+	other_str = "big";
+    } else if (which_cap == "big") {
+	s_cap = rs->_small_queue_cap;
+	b_cap = new_cap;
+	other_cap = s_cap;
+	other_str = "small";
+    } else {
+	printf("malformed parameter 'which_cap': %s\n", which_cap.c_str());
+	return -1;
+    }
+    if (s_cap > b_cap) {
+	printf(("error setting %s queue capacity to %d when the current %s "
+		"queue capacity is %d"), which_cap.c_str(), new_cap,
+	       other_str.c_str(), other_cap);
+	return -1;
+    }
+
     *old_cap = new_cap;
     // Use the ratio of the old threshold to the old capacity to determine the
     // new threshold from the new capacity.
@@ -184,8 +197,8 @@ RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
     *old_thresh = new_thresh;
     pthread_mutex_unlock(&(rs->lock));
 
-    printf("configured %s queue capacity to: %d\n", which.c_str(), new_cap);
-    printf("configured %s marking threshold to: %d\n", which.c_str(),
+    printf("configured %s queue capacity to: %d\n", which_cap.c_str(), new_cap);
+    printf("configured %s marking threshold to: %d\n", which_cap.c_str(),
 	   new_thresh);
     return 0;
 }
@@ -195,12 +208,8 @@ RunSchedule::set_small_queue_cap(const String &str, Element *e, void *,
 				 ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    auto cmp = [](int new_small_queue_cap, int big_queue_cap) {
-	return new_small_queue_cap <= big_queue_cap;
-    };
-    return set_queue_cap(
-	rs, &(rs->_small_queue_cap), &(rs->_small_marking_thresh), cmp,
-	rs->_big_queue_cap, str, "small");
+    return set_queue_cap(rs, &(rs->_small_queue_cap),
+			 &(rs->_small_marking_thresh), str, "small");
 }
 
 String
@@ -214,12 +223,8 @@ RunSchedule::set_big_queue_cap(const String &str, Element *e, void *,
 			       ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    auto cmp = [](int new_big_queue_cap, int small_queue_cap) {
-	return small_queue_cap <= new_big_queue_cap;
-    };
-    return set_queue_cap(
-	rs, &(rs->_big_queue_cap), &(rs->_big_marking_thresh), cmp,
-	rs->_small_queue_cap, str, "big");
+    return set_queue_cap(rs, &(rs->_big_queue_cap),
+			 &(rs->_big_marking_thresh), str, "big");
 }
 
 String

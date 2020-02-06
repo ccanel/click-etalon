@@ -44,8 +44,8 @@ class RunSchedule : public Element {
     static int set_schedule_handler(const String&, Element*, void*, ErrorHandler*);
     static int resize_handler(const String&, Element*, void*, ErrorHandler*);
     static int in_advance_handler(const String&, Element*, void*, ErrorHandler*);
-    static int set_queue_cap(RunSchedule*, int*, int*, bool cmp(int, int), int,
-			     const String&, const String&);
+    static int set_queue_cap(RunSchedule*, int*, int*, const String&,
+			     const String&);
     static int set_small_queue_cap(const String&, Element*, void*, ErrorHandler*);
     static String get_small_queue_cap(Element*, void*);
     static int set_big_queue_cap(const String&, Element*, void*, ErrorHandler*);
