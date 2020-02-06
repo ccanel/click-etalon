@@ -247,8 +247,11 @@ RunSchedule::execute_schedule(ErrorHandler *)
 
     _print = (_print+1) % 100;
     if (!_print) {
-        if (current_schedule)
-            printf("running sched %s\n", current_schedule.c_str());
+        if (current_schedule) {
+            printf("running sched - %s\n", current_schedule.c_str());
+	    printf("VOQ capacities -  small: %d -> large: %d\n",
+		   _small_queue_cap, _big_queue_cap);
+	}
     }
 
     if (current_schedule == "")
