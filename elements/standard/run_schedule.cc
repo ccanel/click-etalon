@@ -22,6 +22,7 @@
 #include <click/error.hh>
 #include <click/standard/scheduleinfo.hh>
 #include <sys/select.h>
+#include <math.h>
 #include <pthread.h>
 
 CLICK_DECLS
@@ -189,10 +190,11 @@ RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
 	return -1;
     }
 
-    *old_cap = new_cap;
     // Use the ratio of the old threshold to the old capacity to determine the
-    // new threshold from the new capacity.
-    int new_thresh = (int) ((((float) *old_thresh)  / *old_cap) * new_cap);
+    // new threshold from the new capacity. Compute the new threshold before we
+    // overwrite *old_cap.
+    int new_thresh = (int) ceil((((float) *old_thresh)  / *old_cap) * new_cap);
+    *old_cap = new_cap;
     *old_thresh = new_thresh;
 
     printf("configured %s VOQ capacity to: %d\n", which_cap.c_str(), new_cap);
