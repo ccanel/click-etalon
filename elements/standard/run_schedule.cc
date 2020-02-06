@@ -160,7 +160,6 @@ RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
 	return -1;
     }
 
-    pthread_mutex_lock(&(rs->lock));
     // Verify that the new queue capacity is in the valid range. A new small
     // queue capacity must be smaller than the current big queue capacity and a
     // new big queue capacity must be larger than the current small queue
@@ -195,7 +194,6 @@ RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
     // new threshold from the new capacity.
     int new_thresh = (int) ((((float) *old_thresh)  / *old_cap) * new_cap);
     *old_thresh = new_thresh;
-    pthread_mutex_unlock(&(rs->lock));
 
     printf("configured %s VOQ capacity to: %d\n", which_cap.c_str(), new_cap);
     printf("configured %s marking threshold to: %d\n", which_cap.c_str(),
@@ -208,8 +206,11 @@ RunSchedule::set_small_queue_cap(const String &str, Element *e, void *,
 				 ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    return set_queue_cap(rs, &(rs->_small_queue_cap),
-			 &(rs->_small_marking_thresh), str, "small");
+    pthread_mutex_lock(&(rs->lock));
+    int ret = set_queue_cap(rs, &(rs->_small_queue_cap),
+			    &(rs->_small_marking_thresh), str, "small");
+    pthread_mutex_unlock(&(rs->lock));
+    return ret;
 }
 
 String
@@ -223,8 +224,11 @@ RunSchedule::set_big_queue_cap(const String &str, Element *e, void *,
 			       ErrorHandler *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    return set_queue_cap(rs, &(rs->_big_queue_cap),
-			 &(rs->_big_marking_thresh), str, "big");
+    pthread_mutex_lock(&(rs->lock));
+    int ret = set_queue_cap(rs, &(rs->_big_queue_cap),
+			    &(rs->_big_marking_thresh), str, "big");
+    pthread_mutex_unlock(&(rs->lock));
+    return ret;
 }
 
 String
