@@ -264,7 +264,7 @@ RunSchedule::split(const String &s, char delim) {
 }
 
 int
-RunSchedule::execute_schedule(ErrorHandler *)
+RunSchedule::execute_schedule(ErrorHandler *errh)
 {
     // parse schedule...
 
@@ -288,8 +288,23 @@ RunSchedule::execute_schedule(ErrorHandler *)
     if (!_print) {
         if (current_schedule) {
             printf("running schedule - %s\n", current_schedule.c_str());
-	    printf("VOQ capacities - small: %d -> big: %d - resizing: %s\n",
-		   _small_queue_cap, _big_queue_cap, resize ? "yes": "no");
+	    printf(("VOQ capacities - small: %d -> big: %d - resizing: %s\n"),
+		   small_cap, big_cap, resize ? "yes": "no");
+	}
+	// Verify that all VOQs have either the small or big capacity. Of
+	// course, this does not verify that they have the correct one between
+	// those two options.
+	for(int dst = 0; dst < _num_hosts; ++dst) {
+	    for(int src = 0; src < _num_hosts; ++src) {
+		int cap = atoi(_queue_cap[src * _num_hosts + dst]->call_read().c_str());
+		if (cap != small_cap && cap != big_cap) {
+		    errh->fatal(
+		        ("ERROR: Inconsistent capacity in VOQ q%d%d: %d. This "
+			 "capacity is not equal to either the small (%d) or big "
+			 "(%d) VOQ capacities."),
+			src + 1, dst + 1, cap, small_cap, big_cap);
+		}
+	    }
 	}
     }
 
