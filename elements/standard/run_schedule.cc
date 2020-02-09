@@ -69,7 +69,7 @@ RunSchedule::initialize(ErrorHandler *errh)
         for(int dst = 0; dst < _num_hosts; dst++) {
 	    char resize_cap_h[500];
 	    sprintf(resize_cap_h, "hybrid_switch/q%d%d/q.resize_capacity",
-                    src+1, dst+1);
+                    src + 1, dst + 1);
             _queue_cap[src * _num_hosts + dst] = new HandlerCall(resize_cap_h);
             _queue_cap[src * _num_hosts + dst]->
                 initialize(HandlerCall::f_read | HandlerCall::f_write, this,
@@ -77,7 +77,7 @@ RunSchedule::initialize(ErrorHandler *errh)
 
             char marking_thresh_h[500];
             sprintf(marking_thresh_h,
-                "hybrid_switch/q%d%d/q.marking_threshold", src+1, dst+1);
+                "hybrid_switch/q%d%d/q.marking_threshold", src + 1, dst + 1);
             _queue_marking_thresh[src * _num_hosts + dst] =
                 new HandlerCall(marking_thresh_h);
             _queue_marking_thresh[src * _num_hosts + dst]->
@@ -89,7 +89,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     _circuit_pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
         char handler[500];
-        sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst+1);
+        sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst + 1);
         _circuit_pull_switch[dst] = new HandlerCall(handler);
         _circuit_pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
     }
@@ -99,7 +99,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     for(int src = 0; src < _num_hosts; src++) {
         for(int dst = 0; dst < _num_hosts; dst++) {
             char handler[500];
-            sprintf(handler, "hybrid_switch/pps%d%d.switch", src+1, dst+1);
+            sprintf(handler, "hybrid_switch/pps%d%d.switch", src + 1, dst + 1);
             _packet_pull_switch[src * _num_hosts + dst] =
                 new HandlerCall(handler);
             _packet_pull_switch[src * _num_hosts + dst]->
@@ -256,7 +256,7 @@ RunSchedule::split(const String &s, char delim) {
     for(int i = 0; i < s.length(); i++) {
         if (s[i] == delim) {
             elems.push_back(s.substring(prev, i-prev));
-            prev = i+1;
+            prev = i + 1;
         }
     }
     elems.push_back(s.substring(prev, s.length()-prev));
@@ -284,7 +284,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     pthread_mutex_unlock(&lock);
 
 
-    _print = (_print+1) % 100;
+    _print = (_print + 1) % 100;
     if (!_print) {
         if (current_schedule) {
             printf("running schedule - %s\n", current_schedule.c_str());
@@ -305,7 +305,7 @@ RunSchedule::execute_schedule(ErrorHandler *)
     Vector<String> c;
     for(int i = 1; i < v.size(); i+=2) {
         durations[j] = atoi(v[i].c_str());
-        c = RunSchedule::split(v[i+1], '/');
+        c = RunSchedule::split(v[i + 1], '/');
         for(int k = 0; k < c.size(); k++) {
             configurations[j].push_back(atoi(c[k].c_str()));
         }
