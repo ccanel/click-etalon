@@ -159,94 +159,63 @@ RunSchedule::in_advance_handler(const String &str, Element *e, void *,
     return 0;
 }
 
-
 int
-RunSchedule::set_queue_cap(RunSchedule *rs, int* old_cap, int* old_thresh,
-			   const String &new_cap_str, const String &which_cap)
+RunSchedule::set_queue_cap(const String &str, Element *e, void *,
+                           ErrorHandler *errh)
 {
-    int new_cap = 0;
-    if (!IntArg().parse(new_cap_str, new_cap) || new_cap <= 0) {
-	printf("error parsing new %s VOQ capacity: %s\n", which_cap.c_str(),
-	       new_cap_str.c_str());
-	return -1;
+    Vector<String> caps_s = split(str, ',');
+    Vector<int> caps_i;
+    for (const String &cap_s : caps_s) {
+        int cap_i = 0;
+        if (!IntArg().parse(cap_s, cap_i) || cap_i <= 0) {
+            errh->fatal("ERROR: Error parsing new VOQ capacity: %s",
+                        cap_s.c_str());
+            return -1;
+        }
+        caps_i.push_back(cap_i);
     }
-
-    // Verify that the new queue capacity is in the valid range. A new small
-    // queue capacity must be smaller than the current big queue capacity and a
-    // new big queue capacity must be larger than the current small queue
-    // capacity.
-    int s_cap;
-    int b_cap;
-    int other_cap;
-    String other_str;
-    if (which_cap == "small") {
-	s_cap = new_cap;
-	b_cap = rs->_big_queue_cap;
-	other_cap = b_cap;
-	other_str = "big";
-    } else if (which_cap == "big") {
-	s_cap = rs->_small_queue_cap;
-	b_cap = new_cap;
-	other_cap = s_cap;
-	other_str = "small";
-    } else {
-	printf("malformed parameter 'which_cap': %s\n", which_cap.c_str());
-	return -1;
+    if (caps_i.size() != 2) {
+        errh->fatal(("ERROR: VOQ capacity configuration \"%s\" does not "
+                     "specify exactly two capacities!"), str);
+        return -1;
     }
+    int s_cap = caps_i[0];
+    int b_cap = caps_i[1];
     if (s_cap > b_cap) {
-	printf(("error setting %s VOQ capacity to %d when the current %s VOQ "
-		"capacity is %d\n"), which_cap.c_str(), new_cap,
-	       other_str.c_str(), other_cap);
-	return -1;
+        errh->fatal(("ERROR: Cannot set the small VOQ capacity to %d and the "
+                     "big VOQ capacity to %d!"), s_cap, b_cap);
+        return -1;
     }
 
     // Use the ratio of the old threshold to the old capacity to determine the
-    // new threshold from the new capacity. Compute the new threshold before we
-    // overwrite *old_cap.
-    int new_thresh = (int) ceil((((float) *old_thresh)  / *old_cap) * new_cap);
-    *old_cap = new_cap;
-    *old_thresh = new_thresh;
+    // new threshold from the new capacity.
+    auto new_thresh = [] (int old_thresh, int old_cap, int new_cap) {
+        return (int) ceil((((float) old_thresh)  / old_cap) * new_cap);
+    };
 
-    printf("configured %s VOQ capacity to: %d\n", which_cap.c_str(), new_cap);
-    printf("configured %s marking threshold to: %d\n", which_cap.c_str(),
-	   new_thresh);
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    pthread_mutex_lock(&(rs->lock));
+    // Compute the new thresholds before we overwrite the old capacities.
+    rs->_small_marking_thresh = new_thresh(rs->_small_marking_thresh,
+                                           rs->_small_queue_cap, s_cap);
+    rs->_big_marking_thresh = new_thresh(rs->_big_marking_thresh,
+                                         rs->_big_queue_cap, b_cap);
+    rs->_small_queue_cap = s_cap;
+    rs->_big_queue_cap = b_cap;
+    pthread_mutex_unlock(&(rs->lock));
+
+    printf("configured VOQ capacities - small: %d -> big: %d\n",
+           rs->_small_queue_cap, rs->_big_queue_cap);
+    printf("configured VOQ marking thresholds - small: %d -> big: %d\n",
+           rs->_small_marking_thresh, rs->_big_marking_thresh);
     return 0;
 }
 
-int
-RunSchedule::set_small_queue_cap(const String &str, Element *e, void *,
-				 ErrorHandler *)
+String
+RunSchedule::get_queue_cap(Element *e, void *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    pthread_mutex_lock(&(rs->lock));
-    int ret = set_queue_cap(rs, &(rs->_small_queue_cap),
-			    &(rs->_small_marking_thresh), str, "small");
-    pthread_mutex_unlock(&(rs->lock));
-    return ret;
-}
-
-String
-RunSchedule::get_small_queue_cap(Element *e, void *)
-{
-    return String(static_cast<RunSchedule *>(e)->_small_queue_cap);
-}
-
-int
-RunSchedule::set_big_queue_cap(const String &str, Element *e, void *,
-			       ErrorHandler *)
-{
-    RunSchedule *rs = static_cast<RunSchedule *>(e);
-    pthread_mutex_lock(&(rs->lock));
-    int ret = set_queue_cap(rs, &(rs->_big_queue_cap),
-			    &(rs->_big_marking_thresh), str, "big");
-    pthread_mutex_unlock(&(rs->lock));
-    return ret;
-}
-
-String
-RunSchedule::get_big_queue_cap(Element *e, void *)
-{
-    return String(static_cast<RunSchedule *>(e)->_big_queue_cap);
+    return String(rs->_small_queue_cap) + "," + String(rs->_big_queue_cap);
 }
 
 Vector<String>
@@ -549,10 +518,8 @@ RunSchedule::add_handlers()
     add_write_handler("setSchedule", set_schedule_handler, 0);
     add_write_handler("setDoResize", resize_handler, 0);
     add_write_handler("setInAdvance", in_advance_handler, 0);
-    add_write_handler("small_queue_capacity", set_small_queue_cap, 0);
-    add_read_handler("small_queue_capacity", get_small_queue_cap, 0);
-    add_write_handler("big_queue_capacity", set_big_queue_cap, 0);
-    add_read_handler("big_queue_capacity", get_big_queue_cap, 0);
+    add_write_handler("queue_capacity", set_queue_cap, 0);
+    add_read_handler("queue_capacity", get_queue_cap, 0);
 }
 
 CLICK_ENDDECLS
