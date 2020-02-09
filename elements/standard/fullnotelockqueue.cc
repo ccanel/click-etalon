@@ -247,9 +247,7 @@ FullNoteLockQueue::clear(const String &, Element *e, void *,
 String
 FullNoteLockQueue::get_resize_capacity(Element *e, void *)
 {
-    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    int cap = fq->_capacity;
-    return String(cap);
+    return String(static_cast<FullNoteLockQueue *>(e)->_capacity);
 }
 
 int
@@ -269,8 +267,7 @@ FullNoteLockQueue::set_marking_enabled(const String &str, Element *e, void *,
 String
 FullNoteLockQueue::get_marking_enabled(Element *e, void *)
 {
-    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    return String(fq->_marking_enabled);
+    return String(static_cast<FullNoteLockQueue *>(e)->_marking_enabled);
 }
 
 int
@@ -293,8 +290,7 @@ FullNoteLockQueue::set_marking_thresh(const String &str, Element *e, void *,
 String
 FullNoteLockQueue::get_marking_thresh(Element *e, void *)
 {
-    FullNoteLockQueue *fq = static_cast<FullNoteLockQueue *>(e);
-    return String(fq->_thresh);
+    return String(static_cast<FullNoteLockQueue *>(e)->_thresh);
 }
 
 void
