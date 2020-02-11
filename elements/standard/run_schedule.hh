@@ -46,6 +46,8 @@ class RunSchedule : public Element {
     static int in_advance_handler(const String&, Element*, void*, ErrorHandler*);
     static int set_queue_cap(const String&, Element*, void*, ErrorHandler*);
     static String get_queue_cap(Element*, void *);
+    static int set_marking_thresh(const String&, Element*, void*, ErrorHandler*);
+    static String get_marking_thresh(Element*, void *);
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 

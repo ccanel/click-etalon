@@ -187,27 +187,14 @@ RunSchedule::set_queue_cap(const String &str, Element *e, void *,
         return -1;
     }
 
-    // Use the ratio of the old threshold to the old capacity to determine the
-    // new threshold from the new capacity.
-    auto new_thresh = [] (int old_thresh, int old_cap, int new_cap) {
-        return (int) ceil((((float) old_thresh)  / old_cap) * new_cap);
-    };
-
     RunSchedule *rs = static_cast<RunSchedule *>(e);
     pthread_mutex_lock(&(rs->lock));
-    // Compute the new thresholds before we overwrite the old capacities.
-    rs->_small_marking_thresh = new_thresh(rs->_small_marking_thresh,
-                                           rs->_small_queue_cap, s_cap);
-    rs->_big_marking_thresh = new_thresh(rs->_big_marking_thresh,
-                                         rs->_big_queue_cap, b_cap);
     rs->_small_queue_cap = s_cap;
     rs->_big_queue_cap = b_cap;
     pthread_mutex_unlock(&(rs->lock));
 
     printf("configured VOQ capacities - small: %d -> big: %d\n",
            rs->_small_queue_cap, rs->_big_queue_cap);
-    printf("configured VOQ marking thresholds - small: %d -> big: %d\n",
-           rs->_small_marking_thresh, rs->_big_marking_thresh);
     return 0;
 }
 
@@ -216,6 +203,48 @@ RunSchedule::get_queue_cap(Element *e, void *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
     return String(rs->_small_queue_cap) + "," + String(rs->_big_queue_cap);
+}
+
+int
+RunSchedule::set_marking_thresh(const String &str, Element *e, void *,
+				ErrorHandler *errh)
+{
+    Vector<String> threshs_s = split(str, ',');
+    Vector<int> threshs_i;
+    for (const String &thresh_s : threshs_s) {
+        int thresh_i = 0;
+        if (!IntArg().parse(thresh_s, thresh_i) || thresh_i <= 0) {
+            errh->fatal("ERROR: Error parsing new marking threshold: %s",
+                        thresh_s.c_str());
+            return -1;
+        }
+        threshs_i.push_back(thresh_i);
+    }
+    if (threshs_i.size() != 2) {
+        errh->fatal(("ERROR: Marking threshold configuration \"%s\" does not "
+                     "specify exactly two thresholds!"), str);
+        return -1;
+    }
+    int s_thresh = threshs_i[0];
+    int b_thresh = threshs_i[1];
+
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    pthread_mutex_lock(&(rs->lock));
+    rs->_small_marking_thresh = s_thresh;
+    rs->_big_marking_thresh = b_thresh;
+    pthread_mutex_unlock(&(rs->lock));
+
+    printf("configured VOQ marking thresholds - small: %d -> big: %d\n",
+           rs->_small_marking_thresh, rs->_big_marking_thresh);
+    return 0;
+}
+
+String
+RunSchedule::get_marking_thresh(Element *e, void *)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    return String(rs->_small_marking_thresh) + "," +
+	String(rs->_big_marking_thresh);
 }
 
 Vector<String>
@@ -520,6 +549,8 @@ RunSchedule::add_handlers()
     add_write_handler("setInAdvance", in_advance_handler, 0);
     add_write_handler("queue_capacity", set_queue_cap, 0);
     add_read_handler("queue_capacity", get_queue_cap, 0);
+    add_write_handler("marking_threshold", set_marking_thresh, 0);
+    add_read_handler("marking_threshold", get_marking_thresh, 0);
 }
 
 CLICK_ENDDECLS
