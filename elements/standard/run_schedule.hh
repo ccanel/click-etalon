@@ -50,6 +50,10 @@ class RunSchedule : public Element {
 
     static int set_marking_thresh(const String&, Element*, void*, ErrorHandler*);
     static String get_marking_thresh(Element*, void *);
+
+    static int set_extra_circuit_del(const String&, Element*, void*, ErrorHandler*);
+    static String get_extra_circuit_del(Element*, void *);
+
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
@@ -60,8 +64,12 @@ class RunSchedule : public Element {
     int _big_queue_cap;
     int _small_marking_thresh;
     int _big_marking_thresh;
+    double _extra_circuit_del_s;
+    // Whether the previous week used an extra circuit delay.
+    bool _prev_extra_del;
     HandlerCall **_queue_cap;
     HandlerCall **_queue_marking_thresh;
+    HandlerCall **_extra_circuit_del;
     HandlerCall **_circuit_pull_switch;
     HandlerCall **_packet_pull_switch;
     HandlerCall *_ece_map;

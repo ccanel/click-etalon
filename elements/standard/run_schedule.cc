@@ -30,7 +30,8 @@ CLICK_DECLS
 RunSchedule::RunSchedule() : _new_sched(false), _task(this), _num_hosts(0),
                              _small_queue_cap(16), _big_queue_cap(128),
                              _small_marking_thresh(1000),
-                             _big_marking_thresh(1000), _print(0),
+                             _big_marking_thresh(1000), _extra_circuit_del_s(0),
+                             _prev_extra_del(false), _print(0),
                              _in_advance(12000), _next_time(0)
 {
     pthread_mutex_init(&lock, NULL);
@@ -87,11 +88,18 @@ RunSchedule::initialize(ErrorHandler *errh)
     }
 
     _circuit_pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
+    _extra_circuit_del = (HandlerCall **)malloc(sizeof(HandlerCall *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
-        char handler[500];
-        sprintf(handler, "hybrid_switch/circuit_link%d/ps.switch", dst + 1);
-        _circuit_pull_switch[dst] = new HandlerCall(handler);
+        char circuit_pull_switch_h[500];
+        sprintf(circuit_pull_switch_h, "hybrid_switch/circuit_link%d/ps.switch", dst + 1);
+        _circuit_pull_switch[dst] = new HandlerCall(circuit_pull_switch_h);
         _circuit_pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
+
+        char extra_circuit_del_h[500];
+        sprintf(extra_circuit_del_h, "hybrid_switch/circuit_link%d/du.delay", dst + 1);
+        _extra_circuit_del[dst] = new HandlerCall(extra_circuit_del_h);
+        _extra_circuit_del[dst]->initialize(
+            HandlerCall::f_read | HandlerCall::f_write, this, errh);
     }
 
     _packet_pull_switch = (HandlerCall **)malloc(sizeof(HandlerCall *) * \
@@ -247,6 +255,31 @@ RunSchedule::get_marking_thresh(Element *e, void *)
 	String(rs->_big_marking_thresh);
 }
 
+int
+RunSchedule::set_extra_circuit_del(const String &str, Element *e, void *,
+                                   ErrorHandler *errh)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    double extra_circuit_del_s = atof(str.c_str());
+    if (extra_circuit_del_s < 0) {
+        errh->fatal(("ERROR: Extra circuit delay cannot be less than zero, "
+                     "but is: %d"), extra_circuit_del_s);
+        return -1;
+    }
+    pthread_mutex_lock(&(rs->lock));
+    rs->_extra_circuit_del_s = extra_circuit_del_s;
+    pthread_mutex_unlock(&(rs->lock));
+    printf("Configured extra circuit delay to: %s\n", str.c_str());
+    return 0;
+}
+
+String
+RunSchedule::get_extra_circuit_del(Element *e, void *)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    return String(rs->_extra_circuit_del_s);
+}
+
 Vector<String>
 RunSchedule::split(const String &s, char delim) {
     Vector<String> elems;
@@ -277,18 +310,22 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
     int small_thresh = _small_marking_thresh;
     int big_thresh = _big_marking_thresh;
     int in_advance = _in_advance;
-    bool new_s = new_sched;
-    new_sched = false;
+    double extra_circuit_del_s = _extra_circuit_del_s;
+    bool cur_extra_del = !_prev_extra_del;
+    _prev_extra_del = cur_extra_del;
+    bool new_s = _new_sched;
+    _new_sched = false;
     pthread_mutex_unlock(&lock);
 
-
-    _print = (_print + 1) % 100;
+    _print = (_print + 1) % 99;
     if (!_print) {
         if (current_schedule) {
             printf("running schedule - %s\n", current_schedule.c_str());
 	    printf(("VOQ capacities - small: %d -> big: %d - resizing: %s\n"),
 		   small_cap, big_cap, resize ? "yes": "no");
 	}
+        printf("Using extra circuit delay (%f s): %s\n", extra_circuit_del_s,
+               cur_extra_del ? "yes" : "no");
 	// Verify that all VOQs have either the small or big capacity. Of
 	// course, this does not verify that they have the correct one between
 	// those two options.
@@ -396,6 +433,12 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
             int src = configurations[m][dst];
             _circuit_pull_switch[dst]->call_write(String(src));
             // printf("  enabled circuit for: %d -> %d\n", src, dst);
+            if (cur_extra_del) {
+                _extra_circuit_del[dst]->
+                    call_write(String(extra_circuit_del_s));
+            } else {
+                _extra_circuit_del[dst]->call_write(String(0));
+            }
 
             // If the circuit to this dst is disabled and there are more than
             // one configuration, then this must be a circuit night. Disable
@@ -551,6 +594,8 @@ RunSchedule::add_handlers()
     add_read_handler("queue_capacity", get_queue_cap, 0);
     add_write_handler("marking_threshold", set_marking_thresh, 0);
     add_read_handler("marking_threshold", get_marking_thresh, 0);
+    add_write_handler("extra_circuit_delay", set_extra_circuit_del, 0);
+    add_read_handler("extra_circuit_delay", get_extra_circuit_del, 0);
 }
 
 CLICK_ENDDECLS
