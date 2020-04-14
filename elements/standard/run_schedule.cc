@@ -27,7 +27,7 @@
 
 CLICK_DECLS
 
-RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
+RunSchedule::RunSchedule() : _new_sched(false), _task(this), _num_hosts(0),
                              _small_queue_cap(16), _big_queue_cap(128),
                              _small_marking_thresh(1000),
                              _big_marking_thresh(1000), _print(0),
@@ -124,7 +124,7 @@ RunSchedule::set_schedule_handler(const String &str, Element *e, void *,
 
     pthread_mutex_lock(&(rs->lock));
     if (rs->next_schedule != str)
-        rs->new_sched = true;
+        rs->_new_sched = true;
     rs->next_schedule = String(str);
     pthread_mutex_unlock(&(rs->lock));
     return 0;
@@ -488,7 +488,7 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
 
 	// if (num_configurations == 2 && m == 0) {
 	//     pthread_mutex_lock(&lock);
-	//     if (!new_sched) {
+	//     if (!_new_sched) {
 	// 	// same single configuration next round... skip down time
 	// 	pthread_mutex_unlock(&lock);
 	// 	break;

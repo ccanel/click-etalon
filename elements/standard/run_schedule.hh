@@ -51,7 +51,7 @@ class RunSchedule : public Element {
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
 
-    bool new_sched;
+    bool _new_sched;
     Task _task;
     int _num_hosts;
     int _small_queue_cap;
