@@ -292,18 +292,22 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
 	// Verify that all VOQs have either the small or big capacity. Of
 	// course, this does not verify that they have the correct one between
 	// those two options.
-	for(int dst = 0; dst < _num_hosts; ++dst) {
-	    for(int src = 0; src < _num_hosts; ++src) {
-		int cap = atoi(_queue_cap[src * _num_hosts + dst]->call_read().c_str());
-		if (cap != small_cap && cap != big_cap) {
-		    errh->fatal(
-		        ("ERROR: Inconsistent capacity in VOQ q%d%d: %d. This "
-			 "capacity is not equal to either the small (%d) or big "
-			 "(%d) VOQ capacities."),
-			src + 1, dst + 1, cap, small_cap, big_cap);
-		}
-	    }
-	}
+        //
+        // TODO: There is a race condition between setting the queue capacity in
+        //       RunSchedule and the VOQs themselves. We need a way to update
+        //       both atomically. Until then, this check is disabled.
+	// for(int dst = 0; dst < _num_hosts; ++dst) {
+	//     for(int src = 0; src < _num_hosts; ++src) {
+	// 	int cap = atoi(_queue_cap[src * _num_hosts + dst]->call_read().c_str());
+	// 	if (cap != small_cap && cap != big_cap) {
+	// 	    errh->fatal(
+	// 	        ("ERROR: Inconsistent capacity in VOQ q%d%d: %d. This "
+	// 		 "capacity is not equal to either the small (%d) or big "
+	// 		 "(%d) VOQ capacities."),
+	// 		src + 1, dst + 1, cap, small_cap, big_cap);
+	// 	}
+	//     }
+	// }
     }
 
     if (current_schedule == "")
