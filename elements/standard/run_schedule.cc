@@ -261,7 +261,7 @@ RunSchedule::set_circuit_lat(const String &str, Element *e, void *,
                              ErrorHandler *errh)
 {
     Vector<String> lats_s = split(str, ',');
-    Vector<int> lats_d;
+    Vector<double> lats_d;
     for (const String &lat_s : lats_s) {
         double lat_d = 0;
         if (!DoubleArg().parse(lat_s, lat_d) || lat_d <= 0) {
@@ -276,13 +276,13 @@ RunSchedule::set_circuit_lat(const String &str, Element *e, void *,
                      "specify exactly two latencies!"), str);
         return -1;
     }
-    int s_lat = lats_d[0];
-    int b_lat = lats_d[1];
+    double s_lat_d = lats_d[0];
+    double b_lat_d = lats_d[1];
 
     RunSchedule *rs = static_cast<RunSchedule *>(e);
     pthread_mutex_lock(&(rs->lock));
-    rs->_small_circuit_lat_s = s_lat;
-    rs->_big_circuit_lat_s = b_lat;
+    rs->_small_circuit_lat_s = s_lat_d;
+    rs->_big_circuit_lat_s = b_lat_d;
     pthread_mutex_unlock(&(rs->lock));
 
     printf("configured circuit latencies - small: %f s -> big: %f s\n",
