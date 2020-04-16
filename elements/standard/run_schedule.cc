@@ -30,9 +30,10 @@ CLICK_DECLS
 RunSchedule::RunSchedule() : _new_sched(false), _task(this), _num_hosts(0),
                              _small_queue_cap(16), _big_queue_cap(128),
                              _small_marking_thresh(1000),
-                             _big_marking_thresh(1000), _extra_circuit_del_s(0),
-                             _prev_extra_del(false), _print(0),
-                             _in_advance(12000), _next_time(0)
+                             _big_marking_thresh(1000),
+                             _small_circuit_lat_s(0.001),
+                             _big_circuit_lat_s(0.001), _prev_long_lat(false),
+                             _print(0), _in_advance(12000), _next_time(0)
 {
     pthread_mutex_init(&lock, NULL);
     clock_gettime(CLOCK_MONOTONIC, &_start_time);
@@ -88,17 +89,17 @@ RunSchedule::initialize(ErrorHandler *errh)
     }
 
     _circuit_pull_switch = (HandlerCall **)malloc(sizeof(Handler *) * _num_hosts);
-    _extra_circuit_del = (HandlerCall **)malloc(sizeof(HandlerCall *) * _num_hosts);
+    _circuit_lat = (HandlerCall **)malloc(sizeof(HandlerCall *) * _num_hosts);
     for(int dst = 0; dst < _num_hosts; dst++) {
         char circuit_pull_switch_h[500];
         sprintf(circuit_pull_switch_h, "hybrid_switch/circuit_link%d/ps.switch", dst + 1);
         _circuit_pull_switch[dst] = new HandlerCall(circuit_pull_switch_h);
         _circuit_pull_switch[dst]->initialize(HandlerCall::f_write, this, errh);
 
-        char extra_circuit_del_h[500];
-        sprintf(extra_circuit_del_h, "hybrid_switch/circuit_link%d/du.delay", dst + 1);
-        _extra_circuit_del[dst] = new HandlerCall(extra_circuit_del_h);
-        _extra_circuit_del[dst]->initialize(
+        char circuit_lat_h[500];
+        sprintf(circuit_lat_h, "hybrid_switch/circuit_link%d/lu.latency", dst + 1);
+        _circuit_lat[dst] = new HandlerCall(circuit_lat_h);
+        _circuit_lat[dst]->initialize(
             HandlerCall::f_read | HandlerCall::f_write, this, errh);
     }
 
@@ -256,28 +257,45 @@ RunSchedule::get_marking_thresh(Element *e, void *)
 }
 
 int
-RunSchedule::set_extra_circuit_del(const String &str, Element *e, void *,
-                                   ErrorHandler *errh)
+RunSchedule::set_circuit_lat(const String &str, Element *e, void *,
+                             ErrorHandler *errh)
 {
-    RunSchedule *rs = static_cast<RunSchedule *>(e);
-    double extra_circuit_del_s = atof(str.c_str());
-    if (extra_circuit_del_s < 0) {
-        errh->fatal(("ERROR: Extra circuit delay cannot be less than zero, "
-                     "but is: %d"), extra_circuit_del_s);
+    Vector<String> lats_s = split(str, ',');
+    Vector<int> lats_d;
+    for (const String &lat_s : lats_s) {
+        double lat_d = 0;
+        if (!DoubleArg().parse(lat_s, lat_d) || lat_d <= 0) {
+            errh->fatal("ERROR: Error parsing new marking threshold: %s",
+                        lat_s.c_str());
+            return -1;
+        }
+        lats_d.push_back(lat_d);
+    }
+    if (lats_d.size() != 2) {
+        errh->fatal(("ERROR: Circuit latency configuration \"%s\" does not "
+                     "specify exactly two latencies!"), str);
         return -1;
     }
+    int s_lat = lats_d[0];
+    int b_lat = lats_d[1];
+
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
     pthread_mutex_lock(&(rs->lock));
-    rs->_extra_circuit_del_s = extra_circuit_del_s;
+    rs->_small_circuit_lat_s = s_lat;
+    rs->_big_circuit_lat_s = b_lat;
     pthread_mutex_unlock(&(rs->lock));
-    printf("Configured extra circuit delay to: %s\n", str.c_str());
+
+    printf("configured circuit latencies - small: %f s -> big: %f s\n",
+           rs->_small_circuit_lat_s, rs->_big_circuit_lat_s);
     return 0;
 }
 
 String
-RunSchedule::get_extra_circuit_del(Element *e, void *)
+RunSchedule::get_circuit_lat(Element *e, void *)
 {
     RunSchedule *rs = static_cast<RunSchedule *>(e);
-    return String(rs->_extra_circuit_del_s);
+    return String(rs->_small_circuit_lat_s) + "," +
+	String(rs->_big_circuit_lat_s);
 }
 
 Vector<String>
@@ -310,9 +328,10 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
     int small_thresh = _small_marking_thresh;
     int big_thresh = _big_marking_thresh;
     int in_advance = _in_advance;
-    double extra_circuit_del_s = _extra_circuit_del_s;
-    bool cur_extra_del = !_prev_extra_del;
-    _prev_extra_del = cur_extra_del;
+    double small_circuit_lat_s = _small_circuit_lat_s;
+    double big_circuit_lat_s = _big_circuit_lat_s;
+    bool cur_long_lat = !_prev_long_lat;
+    _prev_long_lat = cur_long_lat;
     bool new_s = _new_sched;
     _new_sched = false;
     pthread_mutex_unlock(&lock);
@@ -324,8 +343,9 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
 	    printf(("VOQ capacities - small: %d -> big: %d - resizing: %s\n"),
 		   small_cap, big_cap, resize ? "yes": "no");
 	}
-        printf("Using extra circuit delay (%f s): %s\n", extra_circuit_del_s,
-               cur_extra_del ? "yes" : "no");
+        printf("circuit latencies - small: %f s -> big: %f s\n - current: %s\n",
+               small_circuit_lat_s, big_circuit_lat_s,
+               cur_long_lat ? "long" : "short");
 	// Verify that all VOQs have either the small or big capacity. Of
 	// course, this does not verify that they have the correct one between
 	// those two options.
@@ -437,11 +457,10 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
             int src = configurations[m][dst];
             _circuit_pull_switch[dst]->call_write(String(src));
             // printf("  enabled circuit for: %d -> %d\n", src, dst);
-            if (cur_extra_del) {
-                _extra_circuit_del[dst]->
-                    call_write(String(extra_circuit_del_s));
+            if (cur_long_lat) {
+                _circuit_lat[dst]->call_write(String(big_circuit_lat_s));
             } else {
-                _extra_circuit_del[dst]->call_write(String(0));
+                _circuit_lat[dst]->call_write(String(small_circuit_lat_s));
             }
 
             // If the circuit to this dst is disabled and there are more than
@@ -598,8 +617,8 @@ RunSchedule::add_handlers()
     add_read_handler("queue_capacity", get_queue_cap, 0);
     add_write_handler("marking_threshold", set_marking_thresh, 0);
     add_read_handler("marking_threshold", get_marking_thresh, 0);
-    add_write_handler("extra_circuit_delay", set_extra_circuit_del, 0);
-    add_read_handler("extra_circuit_delay", get_extra_circuit_del, 0);
+    add_write_handler("circuit_latency", set_circuit_lat, 0);
+    add_read_handler("circuit_latency", get_circuit_lat, 0);
 }
 
 CLICK_ENDDECLS
