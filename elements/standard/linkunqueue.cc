@@ -231,12 +231,13 @@ LinkUnqueue::write_handler(const String &s, Element *e, void *thunk, ErrorHandle
     default:
         return errh->error("unknown handler");
     }
-    /* do a full reset */
-    u->cleanup(CLEANUP_MANUAL);
-    u->_qhead = u->_qtail = 0;
-    u->Storage::set_tail(0);
-    u->_timer.unschedule();
-    u->_task.reschedule();
+    // Disable the full reset to enable changing the latency on the fly.
+    // /* do a full reset */
+    // u->cleanup(CLEANUP_MANUAL);
+    // u->_qhead = u->_qtail = 0;
+    // u->Storage::set_tail(0);
+    // u->_timer.unschedule();
+    // u->_task.reschedule();
     return 0;
 }
 
