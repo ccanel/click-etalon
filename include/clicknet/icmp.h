@@ -73,11 +73,25 @@ struct click_icmp_needfrag {
     /* followed by original IP header and initial portion of data */
 };
 
+struct click_icmp_tdn_update {
+    uint8_t	icmp_type;		/* 7     ICMP_ACTIVE_TDN_ID    */
+    uint8_t	icmp_code;		/* 0 */
+    uint16_t	icmp_cksum;		/* 2-3   checksum		     */
+#if BYTE_ORDER == LITTLE_ENDIAN
+    uint32_t unused:24,
+            newnet_id:8;
+#endif
+#if BYTE_ORDER == BIG_ENDIAN
+    uint32_t newnet_id:8,
+            unused:24;
+#endif
+};
+
 #define click_icmp_unreach	click_icmp
 #define click_icmp_sourcequench	click_icmp
 #define click_icmp_timxceed	click_icmp
 #define click_icmp_echo		click_icmp_sequenced
-
+#define click_icmp_tdn  click_icmp_tdn_update
 
 /* ICMP type definitions and (indented) code definitions */
 #define	ICMP_ECHOREPLY		0		/* echo reply		     */
@@ -104,6 +118,7 @@ struct click_icmp_needfrag {
 #define	  ICMP_REDIRECT_HOST		1	/*   for host		     */
 #define	  ICMP_REDIRECT_TOSNET		2	/*   for tos and net	     */
 #define	  ICMP_REDIRECT_TOSHOST		3	/*   for tos and host	     */
+#define ICMP_ACTIVE_TDN_ID          7   /*   TDTCP TDN update   */
 #define	ICMP_ECHO		8		/* echo service		     */
 #define	ICMP_ROUTERADVERT	9		/* router advertisement	     */
 #define	ICMP_ROUTERSOLICIT	10		/* router solicitation	     */
