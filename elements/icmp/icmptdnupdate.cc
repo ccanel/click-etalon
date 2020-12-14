@@ -37,11 +37,11 @@ CLICK_CXX_UNPROTECT
 CLICK_DECLS
 
 #define DST_HOST_IP(base, rackid, hostid) \
-  (struct in_addr {.s_addr = htonl(ntohl((base).s_addr) | ((uint32_t)(rackid) << 8) | (hostid))})
+  ((struct in_addr){.s_addr = htonl(ntohl((base).s_addr) | ((uint32_t)(rackid) << 8) | (hostid))})
 #define PACKET_KEY(addr, tdn_id) \
   ((uint64_t)(tdn_id) << 32 | (addr).s_addr)
 
-ICMPTDNUpdate::ICMPTDNUpdate() : n_rack(0), n_host(0), n_tdn(0) {
+ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), n_rack(0), n_host(0), n_tdn(0) {
 
 }
 
@@ -63,7 +63,7 @@ int ICMPTDNUpdate::configure(Vector<String> &conf, ErrorHandler *errh) {
   return 0;
 }
 
-int ICMPTDNUpdate::initialize(ErrorHandler *errh) {
+int ICMPTDNUpdate::initialize(ErrorHandler *) {
   // preconstruct packet if parameters are specified
   // this also assumes the address assignment to be very deterministic:
   // rack i, host j <-> base_addr || ()
@@ -72,18 +72,20 @@ int ICMPTDNUpdate::initialize(ErrorHandler *errh) {
       for (uint8_t j = 0; j < n_host; j++)
         for (uint8_t k = 0; k < n_tdn; k++) {
           struct in_addr dst_ip = DST_HOST_IP(base_addr, i, j);
-          Packet * update_packet = generate_packet_by_ip_tdn(update_packet, k);
+          Packet * update_packet = generate_packet_by_ip_tdn(dst_ip, k);
           cache_packets[PACKET_KEY(dst_ip, k)] = update_packet;
           if (_verbose)
-		        click_chatter("Constructed TDN update pacekt for %s:::%u", inet_ntoa(dst_ip), k);
+		        click_chatter("Constructed TDN update pacekt for %s:::%u", IPAddress(dst_ip).unparse().c_str(), k);
         }
   }
+  return 0;
 }
 
 void ICMPTDNUpdate::cleanup(CleanupStage) {
-  for (Packet * p: cache_packets) {
-    delete p;
-  } 
+  // destructor is private...
+  // for (auto & item: cache_packets) {
+  //   delete item->second;
+  // } 
 }
 
 /*
@@ -95,7 +97,7 @@ void ICMPTDNUpdate::run_timer(Timer *) {
 
 // this is a source module - output port should be "Push", 
 // but there can be a "pull" version?
-void ICMPTDNUpdate::push(int, Packet *p) {
+void ICMPTDNUpdate::push(int, Packet *) {
 
 }
 
@@ -106,7 +108,7 @@ Packet* ICMPTDNUpdate::pull(int) {
 int ICMPTDNUpdate::send_update_host(struct in_addr host_ip, uint8_t new_tdn, ErrorHandler* errh) {
   auto packet_iter = cache_packets.find(PACKET_KEY(host_ip, new_tdn));
   if (packet_iter != cache_packets.end()) {
-    Packet * p = (*packet_iter)->clone();
+    Packet * p = packet_iter->second->clone();
     output(0).push(p);
     return 0;
   }
@@ -130,7 +132,7 @@ int ICMPTDNUpdate::send_update_rack(uint8_t rack_id, uint8_t new_tdn, ErrorHandl
     struct in_addr host_ip = DST_HOST_IP(base_addr, rack_id, host_id);
     send_update_host(host_ip, new_tdn, errh);
   }
-  return 0
+  return 0;
 
 }
 
@@ -140,13 +142,13 @@ int ICMPTDNUpdate::send_update_all(uint8_t new_tdn, ErrorHandler* errh) {
   for (uint8_t rack_id = 0; rack_id < n_rack; rack_id++) {
     send_update_rack(rack_id, new_tdn, errh);
   }
-  return 0
+  return 0;
 
 }
 
 Packet* ICMPTDNUpdate::generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t new_tdn) {
 
-  Packet * q = nullptr;
+  WritablePacket * q = nullptr;
   
   size_t hsz = sizeof(click_ip) + sizeof(click_icmp_tdn);
 	q = Packet::make(hsz);
@@ -159,7 +161,7 @@ Packet* ICMPTDNUpdate::generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t
   nip->ip_v = 4;
   nip->ip_hl = sizeof(click_ip) >> 2;
   nip->ip_len = htons(q->length());
-  uint16_t ip_id = (_count % 0xFFFF) + 1; // ensure ip_id != 0
+  uint16_t ip_id = (new_tdn % 0xFFFF) + 1; // ensure ip_id != 0
   nip->ip_id = htons(ip_id);
   nip->ip_p = IP_PROTO_ICMP; /* icmp */
   nip->ip_ttl = 200;
@@ -200,7 +202,7 @@ int ICMPTDNUpdate::update_all(const String& str, Element* e, void*, ErrorHandler
   if(!IntArg().parse(str, new_tdn)) {
     return errh->error("tdn needs to be an integer!");
   }
-  return send_update_all(new_tdn, errh);
+  return ((ICMPTDNUpdate*)e)->send_update_all(new_tdn, errh);
 }
 
 int ICMPTDNUpdate::update_rack(const String& str, Element* e, void*, ErrorHandler* errh) {
@@ -209,36 +211,36 @@ int ICMPTDNUpdate::update_rack(const String& str, Element* e, void*, ErrorHandle
   
   Vector<String> args = split(str, ',');
   if (args.size() != 2) {
-    return errh->error("Rack update takes <NEWTDN, RACKID>")
+    return errh->error("Rack update takes <RACKID, NEWTDN>");
   }
 
-  if(!IntArg().parse(args[0], new_tdn)) {
-    return errh->error("tdn needs to be an integer!");
-  }
-  if(!IntArg().parse(args[1], rack_id)) {
+  if(!IntArg().parse(args[0], rack_id)) {
     return errh->error("rack_id needs to be an integer!");
   }
+  if(!IntArg().parse(args[1], new_tdn)) {
+    return errh->error("tdn needs to be an integer!");
+  }
 
-  return send_update_rack(new_tdn, rack_id, errh);
+  return ((ICMPTDNUpdate*)e)->send_update_rack(rack_id, new_tdn, errh);
 }
 
 int ICMPTDNUpdate::update_host(const String& str, Element* e, void*, ErrorHandler* errh) {
   struct in_addr host_ip;
-  uint8_t rack_id;
+  uint8_t new_tdn;
   
   Vector<String> args = split(str, ',');
   if (args.size() != 2) {
-    return errh->error("host update takes <NEWTDN, HOST_IP>")
+    return errh->error("host update takes <HOST_IP, NEWTDN>");
   }
 
-  if(!IntArg().parse(args[0], new_tdn)) {
+  if(!IPAddressArg().parse(args[0], host_ip)) {
+    return errh->error("host_ip needs to be an IPV4 address!");
+  }
+  if(!IntArg().parse(args[1], new_tdn)) {
     return errh->error("tdn needs to be an integer!");
   }
-  if(!IPAddressArg().parse(args[1], host_ip)) {
-    return errh->error("rack_id needs to be an integer!");
-  }
   
-  return send_update_host(new_tdn, rack_id, errh);
+  return ((ICMPTDNUpdate*)e)->send_update_host(host_ip, new_tdn, errh);
 }
 
 void ICMPTDNUpdate::add_handlers() {

@@ -4,6 +4,8 @@
 #include <click/element.hh>
 #include <click/timer.hh>
 #include <click/ipaddress.hh>
+
+#include <unordered_map>
 CLICK_DECLS
 
 class ICMPTDNUpdate : public Element { public:
@@ -25,8 +27,9 @@ class ICMPTDNUpdate : public Element { public:
 
   private:
 
-    unordered_map<uint64_t, Packet*> cache_packets;  // key: tdn << 32 | ip
+    std::unordered_map<uint64_t, Packet*> cache_packets;  // key: tdn << 32 | ip
 
+    bool _verbose;
     // most of these are just for cache construction
     uint8_t n_rack;
     uint8_t n_host;
@@ -35,7 +38,7 @@ class ICMPTDNUpdate : public Element { public:
     struct in_addr src_addr;
 
     Packet* generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t new_tdn);
-    Vector<String> split(const String &s, char delim);
+    static Vector<String> split(const String &s, char delim);
 
     int send_update_host(struct in_addr host_ip, uint8_t new_tdn, ErrorHandler* errh);
     int send_update_rack(uint8_t rack_id, uint8_t new_tdn, ErrorHandler* errh);
