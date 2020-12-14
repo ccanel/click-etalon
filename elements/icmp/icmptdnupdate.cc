@@ -41,7 +41,7 @@ CLICK_DECLS
 #define PACKET_KEY(addr, tdn_id) \
   ((uint64_t)((addr).s_addr) << 32 | tdn_id)
 
-ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), _test(true), _timer(this), n_rack(0), n_host(0), n_tdn(0) {
+ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), _test(false), _timer(this), n_rack(0), n_host(0), n_tdn(0) {
 
 }
 
