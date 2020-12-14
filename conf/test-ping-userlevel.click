@@ -16,7 +16,7 @@
 // You should see, printed to standard error, a sequence of "icmp echo"
 // printouts intermixed with "ping :: ICMPPingSource" receive reports.
 
-define($DEV eth0, $DADDR 8.8.8.8, $GW $DEV:gw, $METHOD PCAP,
+define($DEV ens39, $DADDR 8.8.8.8, $GW $DEV:gw, $METHOD PCAP,
        $LIMIT -1, $INTERVAL 1)
 
 FromDevice($DEV, SNIFFER false, METHOD $METHOD)

@@ -77,14 +77,8 @@ struct click_icmp_tdn_update {
     uint8_t	icmp_type;		/* 7     ICMP_ACTIVE_TDN_ID    */
     uint8_t	icmp_code;		/* 0 */
     uint16_t	icmp_cksum;		/* 2-3   checksum		     */
-#if BYTE_ORDER == LITTLE_ENDIAN
-    uint32_t unused:24,
-            newnet_id:8;
-#endif
-#if BYTE_ORDER == BIG_ENDIAN
     uint32_t newnet_id:8,
             unused:24;
-#endif
 };
 
 #define click_icmp_unreach	click_icmp

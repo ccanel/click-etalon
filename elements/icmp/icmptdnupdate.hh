@@ -15,7 +15,7 @@ class ICMPTDNUpdate : public Element { public:
 
     const char *class_name() const		{ return "ICMPTDNUpdate"; }
     const char *port_count() const		{ return "0/1"; }
-    const char *processing() const		{ return "a/a"; }
+    const char *processing() const		{ return "a/h"; }
     int configure(Vector<String> &, ErrorHandler *) CLICK_COLD;
     int initialize(ErrorHandler *) CLICK_COLD;
     void cleanup(CleanupStage) CLICK_COLD;
@@ -30,12 +30,16 @@ class ICMPTDNUpdate : public Element { public:
     std::unordered_map<uint64_t, Packet*> cache_packets;  // key: tdn << 32 | ip
 
     bool _verbose;
+    bool _test;
+    Timer _timer;
+
     // most of these are just for cache construction
     uint8_t n_rack;
     uint8_t n_host;
     uint8_t n_tdn;
     struct in_addr base_addr;
     struct in_addr src_addr;
+
 
     Packet* generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t new_tdn);
     static Vector<String> split(const String &s, char delim);

@@ -27,13 +27,13 @@ elementclass UDPGen {
 
   source :: FastUDPSource($rate, $limit, $size, $seth, $sip, $sport,
                                                 $deth, $dip, $dport);
-  pd :: PollDevice($device) -> ToHost;
+  // pd :: FromDevice($device) -> ToHost;
   source -> td :: ToDevice($device);
 }
 
 // create a UDPGen
 
-u :: UDPGen(eth1, 82000, 820000, 1500,
+u :: UDPGen(ens39, 82000, 820000, 1500,
 	    00:e0:29:05:e2:d4, 2.0.0.2, 1234,
 	    00:c0:95:e2:09:14, 1.0.0.2, 1234);
 

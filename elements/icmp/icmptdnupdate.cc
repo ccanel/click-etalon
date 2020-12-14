@@ -32,16 +32,16 @@
 CLICK_CXX_PROTECT
 # include <linux/vmalloc.h>
 CLICK_CXX_UNPROTECT
-# include <click/cxxunprotect.h>
+# include <click/cxxunprotect.h> 
 #endif
 CLICK_DECLS
 
 #define DST_HOST_IP(base, rackid, hostid) \
-  ((struct in_addr){.s_addr = htonl(ntohl((base).s_addr) | ((uint32_t)(rackid) << 8) | (hostid))})
+  ((struct in_addr){.s_addr = htonl(ntohl((base).s_addr) | ((uint32_t)(rackid) << 8) | (hostid + 1))})
 #define PACKET_KEY(addr, tdn_id) \
-  ((uint64_t)(tdn_id) << 32 | (addr).s_addr)
+  ((uint64_t)((addr).s_addr) << 32 | tdn_id)
 
-ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), n_rack(0), n_host(0), n_tdn(0) {
+ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), _test(true), _timer(this), n_rack(0), n_host(0), n_tdn(0) {
 
 }
 
@@ -56,6 +56,7 @@ int ICMPTDNUpdate::configure(Vector<String> &conf, ErrorHandler *errh) {
       .read("NTDN", n_tdn)
       .read("NRACK", n_rack)
       .read("NHOST", n_host)
+      .read("TEST", _test)
       .complete() < 0) {
 
 	  return -1;
@@ -67,6 +68,14 @@ int ICMPTDNUpdate::initialize(ErrorHandler *) {
   // preconstruct packet if parameters are specified
   // this also assumes the address assignment to be very deterministic:
   // rack i, host j <-> base_addr || ()
+  if (_test) {
+    _timer.initialize(this);
+    _timer.schedule_after_msec(1000);
+    if (n_rack == 0) n_rack = 2;
+    if (n_host == 0) n_rack = 2;
+    if (n_tdn == 0) n_tdn = 2;
+  }
+
   if (n_rack > 0 && n_host > 0 && n_tdn > 0 && base_addr.s_addr != 0) {
     for (uint8_t i = 0; i < n_rack; i++)
       for (uint8_t j = 0; j < n_host; j++)
@@ -74,8 +83,10 @@ int ICMPTDNUpdate::initialize(ErrorHandler *) {
           struct in_addr dst_ip = DST_HOST_IP(base_addr, i, j);
           Packet * update_packet = generate_packet_by_ip_tdn(dst_ip, k);
           cache_packets[PACKET_KEY(dst_ip, k)] = update_packet;
-          if (_verbose)
+          if (_verbose) {
+            click_chatter("Key: %llu", PACKET_KEY(dst_ip, k));
 		        click_chatter("Constructed TDN update pacekt for %s:::%u", IPAddress(dst_ip).unparse().c_str(), k);
+          }
         }
   }
   return 0;
@@ -92,7 +103,12 @@ void ICMPTDNUpdate::cleanup(CleanupStage) {
  * For debugging purpose...
  */
 void ICMPTDNUpdate::run_timer(Timer *) {
-
+  static uint8_t curr_tdn = 0;
+  send_update_all(curr_tdn, nullptr);
+  curr_tdn = (curr_tdn + 1) % n_tdn; 
+  if (_verbose)
+    click_chatter("Timer fired. curr_tdn: %u", curr_tdn);
+  _timer.reschedule_after_msec(1000); 
 }
 
 // this is a source module - output port should be "Push", 
@@ -109,6 +125,8 @@ int ICMPTDNUpdate::send_update_host(struct in_addr host_ip, uint8_t new_tdn, Err
   auto packet_iter = cache_packets.find(PACKET_KEY(host_ip, new_tdn));
   if (packet_iter != cache_packets.end()) {
     Packet * p = packet_iter->second->clone();
+    if (_verbose)
+      click_chatter("Packet ptr: %p", p);
     output(0).push(p);
     return 0;
   }
