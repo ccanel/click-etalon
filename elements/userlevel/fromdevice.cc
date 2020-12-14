@@ -25,6 +25,7 @@
 #include <sys/time.h>
 #if !defined(__sun)
 # include <sys/ioctl.h>
+#include <linux/sockios.h>
 #else
 # include <sys/ioccom.h>
 #endif
