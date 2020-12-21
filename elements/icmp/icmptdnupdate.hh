@@ -4,6 +4,7 @@
 #include <click/element.hh>
 #include <click/timer.hh>
 #include <click/ipaddress.hh>
+#include <clicknet/ether.h>
 
 #include <unordered_map>
 CLICK_DECLS
@@ -37,11 +38,13 @@ class ICMPTDNUpdate : public Element { public:
     uint8_t n_rack;
     uint8_t n_host;
     uint8_t n_tdn;
+    uint8_t ctrlnic;
     struct in_addr base_addr;
     struct in_addr src_addr;
-
+    click_ether ethh;
 
     Packet* generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t new_tdn);
+    // Packet* generate_packet_by_id(uint8_t host, uint8_t rack, uint8_t new_tdn);
     static Vector<String> split(const String &s, char delim);
 
     int send_update_host(struct in_addr host_ip, uint8_t new_tdn, ErrorHandler* errh);

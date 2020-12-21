@@ -1,11 +1,11 @@
 elementclass TDNTester {
-  $device, $src, $base_ip, $ntdn, $nrack, $nhost |
+  $device, $src_ip, $src_eth, $base_ip, $base_eth, $ctrlnic, $ntdn, $nrack, $nhost |
 
-  source :: ICMPTDNUpdate($src, BASE $base_ip, NTDN $ntdn, NRACK $nrack, NHOST $nhost, TEST true);
-  source -> EtherEncap(0x0800, 00:00:c0:ae:67:ef, 00:00:c0:4f:71:ef) -> Queue(64) -> td :: ToDevice($device);
+  source :: ICMPTDNUpdate($src_ip, $src_eth, $base_ip, $base_eth, $ctrlnic, NTDN $ntdn, NRACK $nrack, NHOST $nhost, TEST true);
+  source -> Queue(64) -> td :: ToDevice($device);
 }
 
 // create a TDNTester
 
-t :: TDNTester(ens39, 10.0.1.1, 10.1.0.0, 2, 3, 2);
+t :: TDNTester(ens39, 10.0.1.1, 11:22:33:44:55:66, 10.1.0.0, aa:aa:aa:00:00:00, 3, 2, 3, 2);
 

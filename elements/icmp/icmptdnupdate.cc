@@ -21,6 +21,8 @@
 #include <click/args.hh>
 #include <click/error.hh>
 #include <click/glue.hh>
+#include <click/etheraddress.hh>
+#include <clicknet/ether.h>
 #include <clicknet/ip.h>
 #include <clicknet/icmp.h>
 #include <click/packet_anno.hh>
@@ -41,6 +43,11 @@ CLICK_DECLS
 #define PACKET_KEY(addr, tdn_id) \
   ((uint64_t)((addr).s_addr) << 32 | tdn_id)
 
+#define HOST_FROM_IP(base, addr) \
+  (uint8_t)(ntohl((addr).s_addr & (~(base).s_addr)) & (uint32_t)(0x000000FF))
+#define RACK_FROM_IP(base, addr) \
+  (uint8_t)((ntohl((addr).s_addr & (~(base).s_addr)) & (uint32_t)(0x0000FF00)) >> 8)
+
 ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), _test(false), _timer(this), n_rack(0), n_host(0), n_tdn(0) {
 
 }
@@ -51,8 +58,11 @@ ICMPTDNUpdate::~ICMPTDNUpdate() {
 
 int ICMPTDNUpdate::configure(Vector<String> &conf, ErrorHandler *errh) {
   if (Args(conf, this, errh)
-      .read_mp("SRC", src_addr)
-      .read("BASE", base_addr)
+      .read_mp("IPSRC", src_addr)
+      .read_mp("ETHSRC", EtherAddressArg(), ethh.ether_shost)
+      .read_mp("IPBASE", base_addr)
+      .read_mp("ETHBASE", EtherAddressArg(), ethh.ether_dhost)
+      .read_mp("CTRLNIC", ctrlnic)
       .read("NTDN", n_tdn)
       .read("NRACK", n_rack)
       .read("NHOST", n_host)
@@ -75,6 +85,7 @@ int ICMPTDNUpdate::initialize(ErrorHandler *) {
     if (n_host == 0) n_rack = 2;
     if (n_tdn == 0) n_tdn = 2;
   }
+  ethh.ether_type = htons(0x0800);
 
   if (n_rack > 0 && n_host > 0 && n_tdn > 0 && base_addr.s_addr != 0) {
     for (uint8_t i = 0; i < n_rack; i++)
@@ -168,17 +179,23 @@ Packet* ICMPTDNUpdate::generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t
 
   WritablePacket * q = nullptr;
   
-  size_t hsz = sizeof(click_ip) + sizeof(click_icmp_tdn);
+  size_t hsz = sizeof(click_ip) + sizeof(click_icmp_tdn) + sizeof(click_ether);
 	q = Packet::make(hsz);
   if (!q)
 	  return 0;
 
   memset(q->data(), 0, hsz);
 
-  click_ip *nip = reinterpret_cast<click_ip *>(q->data());
+  click_ether *neth = reinterpret_cast<click_ether *>(q->data());
+  memcpy(neth, &ethh, 14);
+  neth->ether_dhost[3] = RACK_FROM_IP(base_addr, host_ip);
+  neth->ether_dhost[4] = HOST_FROM_IP(base_addr, host_ip);
+  neth->ether_dhost[5] = ctrlnic;
+
+  click_ip *nip = reinterpret_cast<click_ip *>(q->data()+14);
   nip->ip_v = 4;
   nip->ip_hl = sizeof(click_ip) >> 2;
-  nip->ip_len = htons(q->length());
+  nip->ip_len = htons(q->length() - 14);
   uint16_t ip_id = (new_tdn % 0xFFFF) + 1; // ensure ip_id != 0
   nip->ip_id = htons(ip_id);
   nip->ip_p = IP_PROTO_ICMP; /* icmp */
