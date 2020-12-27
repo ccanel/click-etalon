@@ -48,7 +48,7 @@ CLICK_DECLS
 #define RACK_FROM_IP(base, addr) \
   (uint8_t)((ntohl((addr).s_addr & (~(base).s_addr)) & (uint32_t)(0x0000FF00)) >> 8)
 
-ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), _test(false), _timer(this), n_rack(0), n_host(0), n_tdn(0) {
+ICMPTDNUpdate::ICMPTDNUpdate() : _verbose(true), _test(false), _timer(this), h(nullptr), n_rack(0), n_host(0), n_tdn(0) {
 
 }
 
@@ -59,9 +59,9 @@ ICMPTDNUpdate::~ICMPTDNUpdate() {
 int ICMPTDNUpdate::configure(Vector<String> &conf, ErrorHandler *errh) {
   if (Args(conf, this, errh)
       .read_mp("IPSRC", src_addr)
-      .read_mp("ETHSRC", EtherAddressArg(), ethh.ether_shost)
+      .read_mp("ETHSRC", EtherAddressArg(), _ethh.ether_shost)
       .read_mp("IPBASE", base_addr)
-      .read_mp("ETHBASE", EtherAddressArg(), ethh.ether_dhost)
+      .read_mp("ETHBASE", EtherAddressArg(), _ethh.ether_dhost)
       .read_mp("CTRLNIC", ctrlnic)
       .read("NTDN", n_tdn)
       .read("NRACK", n_rack)
@@ -74,7 +74,7 @@ int ICMPTDNUpdate::configure(Vector<String> &conf, ErrorHandler *errh) {
   return 0;
 }
 
-int ICMPTDNUpdate::initialize(ErrorHandler *) {
+int ICMPTDNUpdate::initialize(ErrorHandler * errh) {
   // preconstruct packet if parameters are specified
   // this also assumes the address assignment to be very deterministic:
   // rack i, host j <-> base_addr || ()
@@ -84,8 +84,12 @@ int ICMPTDNUpdate::initialize(ErrorHandler *) {
     if (n_rack == 0) n_rack = 2;
     if (n_host == 0) n_rack = 2;
     if (n_tdn == 0) n_tdn = 2;
+    char handler_char[64] = "t/source.updateAll";
+    h = new HandlerCall(handler_char);
+    int result = h->initialize(HandlerCall::f_write, this, errh);
+    click_chatter("h: %p; res: %d\n", h, result);
   }
-  ethh.ether_type = htons(0x0800);
+  _ethh.ether_type = htons(0x0800);
 
   if (n_rack > 0 && n_host > 0 && n_tdn > 0 && base_addr.s_addr != 0) {
     for (uint8_t i = 0; i < n_rack; i++)
@@ -115,7 +119,8 @@ void ICMPTDNUpdate::cleanup(CleanupStage) {
  */
 void ICMPTDNUpdate::run_timer(Timer *) {
   static uint8_t curr_tdn = 0;
-  send_update_all(curr_tdn, nullptr);
+  // send_update_all(curr_tdn, nullptr);
+  h->call_write(String((int)curr_tdn));
   curr_tdn = (curr_tdn + 1) % n_tdn; 
   if (_verbose)
     click_chatter("Timer fired. curr_tdn: %u", curr_tdn);
@@ -187,7 +192,7 @@ Packet* ICMPTDNUpdate::generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t
   memset(q->data(), 0, hsz);
 
   click_ether *neth = reinterpret_cast<click_ether *>(q->data());
-  memcpy(neth, &ethh, 14);
+  memcpy(neth, &_ethh, 14);
   neth->ether_dhost[3] = RACK_FROM_IP(base_addr, host_ip);
   neth->ether_dhost[4] = HOST_FROM_IP(base_addr, host_ip);
   neth->ether_dhost[5] = ctrlnic;
@@ -233,11 +238,16 @@ Vector<String> ICMPTDNUpdate::split(const String &s, char delim) {
 }
 
 int ICMPTDNUpdate::update_all(const String& str, Element* e, void*, ErrorHandler* errh) {
+  printf("fda, %s\n", str.c_str());
   uint8_t new_tdn;
   if(!IntArg().parse(str, new_tdn)) {
     return errh->error("tdn needs to be an integer!");
   }
-  return ((ICMPTDNUpdate*)e)->send_update_all(new_tdn, errh);
+  printf("%u\n", new_tdn);
+  printf("%s\n", e->name().c_str());
+  ICMPTDNUpdate * itu = static_cast<ICMPTDNUpdate *>(e);
+  printf("%p\n", itu);
+  return itu->send_update_all(new_tdn, errh);
 }
 
 int ICMPTDNUpdate::update_rack(const String& str, Element* e, void*, ErrorHandler* errh) {
@@ -256,7 +266,8 @@ int ICMPTDNUpdate::update_rack(const String& str, Element* e, void*, ErrorHandle
     return errh->error("tdn needs to be an integer!");
   }
 
-  return ((ICMPTDNUpdate*)e)->send_update_rack(rack_id, new_tdn, errh);
+  ICMPTDNUpdate * itu = static_cast<ICMPTDNUpdate *>(e);
+  return itu->send_update_all(new_tdn, errh);
 }
 
 int ICMPTDNUpdate::update_host(const String& str, Element* e, void*, ErrorHandler* errh) {
@@ -274,8 +285,8 @@ int ICMPTDNUpdate::update_host(const String& str, Element* e, void*, ErrorHandle
   if(!IntArg().parse(args[1], new_tdn)) {
     return errh->error("tdn needs to be an integer!");
   }
-  
-  return ((ICMPTDNUpdate*)e)->send_update_host(host_ip, new_tdn, errh);
+  ICMPTDNUpdate * itu = static_cast<ICMPTDNUpdate *>(e);
+  return itu->send_update_all(new_tdn, errh);
 }
 
 void ICMPTDNUpdate::add_handlers() {

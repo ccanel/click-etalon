@@ -3,6 +3,7 @@
 #define CLICK_ICMPTDN_UPDATE_HH
 #include <click/element.hh>
 #include <click/timer.hh>
+#include <click/handlercall.hh>
 #include <click/ipaddress.hh>
 #include <clicknet/ether.h>
 
@@ -33,6 +34,7 @@ class ICMPTDNUpdate : public Element { public:
     bool _verbose;
     bool _test;
     Timer _timer;
+    HandlerCall * h;
 
     // most of these are just for cache construction
     uint8_t n_rack;
@@ -41,7 +43,7 @@ class ICMPTDNUpdate : public Element { public:
     uint8_t ctrlnic;
     struct in_addr base_addr;
     struct in_addr src_addr;
-    click_ether ethh;
+    click_ether _ethh;
 
     Packet* generate_packet_by_ip_tdn(struct in_addr host_ip, uint8_t new_tdn);
     // Packet* generate_packet_by_id(uint8_t host, uint8_t rack, uint8_t new_tdn);
