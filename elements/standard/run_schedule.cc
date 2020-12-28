@@ -113,6 +113,9 @@ RunSchedule::initialize(ErrorHandler *errh)
     _log_config = new HandlerCall("hsl.circuitEvent");
     _log_config->initialize(HandlerCall::f_write, this, errh);
 
+    _icmp_tdn_handler = new HandlerCall("icmptdnsrc/source.updateAll");
+    _icmp_tdn_handler->initialize(HandlerCall::f_write, this, errh);
+
     return 0;
 }
 
@@ -390,6 +393,9 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
         // for (int dst = 0; j < configurations[m].size(); ++dst) {
         //     printf("  %d -> %d\n", configurations[i][dst], dst);
         // }
+        if (num_configurations > 1) {
+            _icmp_tdn_handler->call_write(String((int)m));
+        }
 
         // set configuration
         for(int dst = 0; dst < _num_hosts; dst++) {
