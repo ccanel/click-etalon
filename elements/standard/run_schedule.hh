@@ -67,6 +67,7 @@ class RunSchedule : public Element {
     HandlerCall **_packet_pull_switch;
     HandlerCall *_ece_map;
     HandlerCall *_log_config;
+    HandlerCall * _icmp_tdn_handler;
     int _print;
     clock_t _last_print_time;
     // Print periodic schedule logs every N configs.
