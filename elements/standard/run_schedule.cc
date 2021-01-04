@@ -31,7 +31,9 @@ RunSchedule::RunSchedule() : new_sched(false), _task(this), _num_hosts(0),
                              _small_queue_cap(16), _big_queue_cap(128),
                              _small_marking_thresh(1000),
                              _big_marking_thresh(1000), _print(0),
-                             _in_advance(12000), _next_time(0)
+                             _in_advance(12000), _next_time(0),
+			     _last_print_time(clock()),
+			     _print_every_n_config(100), _print_every_n_sec(10.0)
 {
     pthread_mutex_init(&lock, NULL);
     clock_gettime(CLOCK_MONOTONIC, &_start_time);
@@ -163,6 +165,28 @@ RunSchedule::in_advance_handler(const String &str, Element *e, void *,
 }
 
 int
+RunSchedule::print_n_config_handler(const String &str, Element *e, void *,
+				    ErrorHandler *)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    pthread_mutex_lock(&(rs->lock));
+    rs->_print_every_n_config = atoi(str.c_str());
+    pthread_mutex_unlock(&(rs->lock));
+    return 0;
+}
+
+int
+RunSchedule::print_n_sec_handler(const String &str, Element *e, void *,
+				 ErrorHandler *)
+{
+    RunSchedule *rs = static_cast<RunSchedule *>(e);
+    pthread_mutex_lock(&(rs->lock));
+    rs->_print_every_n_sec = atof(str.c_str());
+    pthread_mutex_unlock(&(rs->lock));
+    return 0;
+}
+
+int
 RunSchedule::set_queue_cap(const String &str, Element *e, void *,
                            ErrorHandler *errh)
 {
@@ -270,7 +294,7 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
     // parse schedule...
 
     // num_schedules [duration config]
-    // config = src_for_dst_0/src_for_dst_1/...
+    // config = dst_for_src_0/dst_for_src_1/...
     // '2 180 1/2/3/0 20 -1/-1/-1/-1'
     pthread_mutex_lock(&lock);
     String current_schedule = String(next_schedule);
@@ -282,11 +306,19 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
     int in_advance = _in_advance;
     bool new_s = new_sched;
     new_sched = false;
+    int print_every_n_config = _print_every_n_config;
+    double print_every_n_sec = _print_every_n_sec;
     pthread_mutex_unlock(&lock);
 
 
-    _print = (_print + 1) % 100;
-    if (!_print) {
+    double dur_secs = ((double)(clock() - _last_print_time))/CLOCKS_PER_SEC;
+    _print = (_print + 1) % print_every_n_config;
+    if (!_print || dur_secs > print_every_n_sec) {
+	// Update last print time after timer expires.
+	_last_print_time = clock();
+	// Reset _print counter since printing has been triggered.
+	_print = 0;
+
         if (current_schedule) {
             printf("running schedule - %s\n", current_schedule.c_str());
 	    printf(("VOQ capacities - small: %d -> big: %d - resizing: %s\n"),
@@ -563,6 +595,8 @@ RunSchedule::add_handlers()
     add_read_handler("queue_capacity", get_queue_cap, 0);
     add_write_handler("marking_threshold", set_marking_thresh, 0);
     add_read_handler("marking_threshold", get_marking_thresh, 0);
+    add_write_handler("setPrintNConfig", print_n_config_handler, 0);
+    add_write_handler("setPrintNSec", print_n_sec_handler, 0);
 }
 
 CLICK_ENDDECLS

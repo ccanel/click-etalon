@@ -4,6 +4,7 @@
 #include <click/element.hh>
 #include <click/timer.hh>
 #include <pthread.h>
+#include <time.h>
 CLICK_DECLS
 
 /*
@@ -50,6 +51,8 @@ class RunSchedule : public Element {
     static String get_marking_thresh(Element*, void *);
     static Vector<String> split(const String&, char);
     int execute_schedule(ErrorHandler *);
+    static int print_n_config_handler(const String&, Element*, void*, ErrorHandler*);
+    static int print_n_sec_handler(const String&, Element*, void*, ErrorHandler*);
 
     bool new_sched;
     Task _task;
@@ -66,6 +69,11 @@ class RunSchedule : public Element {
     HandlerCall *_log_config;
     HandlerCall * _icmp_tdn_handler;
     int _print;
+    clock_t _last_print_time;
+    // Print periodic schedule logs every N configs.
+    int _print_every_n_config;
+    // Print periodic schedule logs every N seconds.
+    double _print_every_n_sec;
     int _in_advance;
     struct timespec _start_time;
     long long _next_time;
