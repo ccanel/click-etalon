@@ -113,7 +113,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     _log_config = new HandlerCall("hsl.circuitEvent");
     _log_config->initialize(HandlerCall::f_write, this, errh);
 
-    _icmp_tdn_handler = new HandlerCall("icmptdnsrc/source.updateAll");
+    _icmp_tdn_handler = new HandlerCall("icmptdnsrc/source.updateRack");
     _icmp_tdn_handler->initialize(HandlerCall::f_write, this, errh);
 
     return 0;
@@ -393,10 +393,8 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
         // for (int dst = 0; j < configurations[m].size(); ++dst) {
         //     printf("  %d -> %d\n", configurations[i][dst], dst);
         // }
-        if (num_configurations > 1) {
-            _icmp_tdn_handler->call_write(String((int)m));
-        }
 
+        char tdnbuf[32];
         // set configuration
         for(int dst = 0; dst < _num_hosts; dst++) {
             int src = configurations[m][dst];
@@ -419,6 +417,14 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
                     call_write(String(-1));
                 // printf(("  circuit night. disabled packet switch for next " +
                 //         "configuration: %d -> %d"), next_src, dst);
+
+                // One possible thing is to send TDN update here...
+            } 
+
+            else if (num_configurations > 1) {
+                bzero(tdnbuf, 32);
+                sprintf(tdnbuf, "%d,%d", src, m/2);
+                _icmp_tdn_handler->call_write(String(tdnbuf));
             }
         }
 
