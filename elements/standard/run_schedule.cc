@@ -456,8 +456,8 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
 
 	    else if (num_configurations > 1) {
                 bzero(tdnbuf, 32);
-                sprintf(tdnbuf, "%d,%d", src+1, m/2);
-		//printf("calling handler - %s\n", tdnbuf);
+                sprintf(tdnbuf, "%d,%d", src, m/2);
+		// printf("calling handler - %s\n", tdnbuf);
                 _icmp_tdn_handler->call_write(String(tdnbuf));
             }
         }

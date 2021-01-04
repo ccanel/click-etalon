@@ -39,7 +39,7 @@ CLICK_CXX_UNPROTECT
 CLICK_DECLS
 
 #define DST_HOST_IP(base, rackid, hostid) \
-  ((struct in_addr){.s_addr = htonl(ntohl((base).s_addr) | ((uint32_t)(rackid) << 8) | (hostid + 1))})
+  ((struct in_addr){.s_addr = htonl(ntohl((base).s_addr) | ((uint32_t)(rackid + 1) << 8) | (hostid + 1))})
 #define PACKET_KEY(addr, tdn_id) \
   ((uint64_t)((addr).s_addr) << 32 | tdn_id)
 
@@ -273,7 +273,7 @@ int ICMPTDNUpdate::update_rack(const String& str, Element* e, void*, ErrorHandle
   }
 
   ICMPTDNUpdate * itu = static_cast<ICMPTDNUpdate *>(e);
-  return itu->send_update_all(new_tdn, errh);
+  return itu->send_update_rack(rack_id, new_tdn, errh);
 }
 
 int ICMPTDNUpdate::update_host(const String& str, Element* e, void*, ErrorHandler* errh) {
@@ -292,7 +292,7 @@ int ICMPTDNUpdate::update_host(const String& str, Element* e, void*, ErrorHandle
     return errh->error("tdn needs to be an integer!");
   }
   ICMPTDNUpdate * itu = static_cast<ICMPTDNUpdate *>(e);
-  return itu->send_update_all(new_tdn, errh);
+  return itu->send_update_host(host_ip, new_tdn, errh);
 }
 
 void ICMPTDNUpdate::add_handlers() {
