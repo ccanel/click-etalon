@@ -115,7 +115,7 @@ RunSchedule::initialize(ErrorHandler *errh)
     _log_config = new HandlerCall("hsl.circuitEvent");
     _log_config->initialize(HandlerCall::f_write, this, errh);
 
-    _icmp_tdn_handler = new HandlerCall("icmptdnsrc/source.updateRack");
+    _icmp_tdn_handler = new HandlerCall("icmptdnsrc.updateRack");
     _icmp_tdn_handler->initialize(HandlerCall::f_write, this, errh);
 
     return 0;
@@ -420,6 +420,7 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
 
     // for each configuration in schedule
     for(int m = 0; m < num_configurations; m++) {
+	// printf("updating\n");
         // printf("current configuration:\n");
         // printf("  duration %d: %d\n", i, durations[i]);
         // for (int dst = 0; j < configurations[m].size(); ++dst) {
@@ -453,9 +454,10 @@ RunSchedule::execute_schedule(ErrorHandler *errh)
                 // One possible thing is to send TDN update here...
             } 
 
-            else if (num_configurations > 1) {
+	    else if (num_configurations > 1) {
                 bzero(tdnbuf, 32);
                 sprintf(tdnbuf, "%d,%d", src+1, m/2);
+		//printf("calling handler - %s\n", tdnbuf);
                 _icmp_tdn_handler->call_write(String(tdnbuf));
             }
         }

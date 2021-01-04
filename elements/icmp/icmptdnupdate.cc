@@ -87,7 +87,7 @@ int ICMPTDNUpdate::initialize(ErrorHandler * errh) {
     char handler_char[64] = "t/source.updateAll";
     h = new HandlerCall(handler_char);
     int result = h->initialize(HandlerCall::f_write, this, errh);
-    click_chatter("h: %p; res: %d\n", h, result);
+    //click_chatter("h: %p; res: %d\n", h, result);
   }
   _ethh.ether_type = htons(0x0800);
 
@@ -98,10 +98,12 @@ int ICMPTDNUpdate::initialize(ErrorHandler * errh) {
           struct in_addr dst_ip = DST_HOST_IP(base_addr, i, j);
           Packet * update_packet = generate_packet_by_ip_tdn(dst_ip, k);
           cache_packets[PACKET_KEY(dst_ip, k)] = update_packet;
+	  /*
           if (_verbose) {
             click_chatter("Key: %llu", PACKET_KEY(dst_ip, k));
 		        click_chatter("Constructed TDN update pacekt for %s:::%u", IPAddress(dst_ip).unparse().c_str(), k);
           }
+	  */
         }
   }
   return 0;
@@ -141,8 +143,10 @@ int ICMPTDNUpdate::send_update_host(struct in_addr host_ip, uint8_t new_tdn, Err
   auto packet_iter = cache_packets.find(PACKET_KEY(host_ip, new_tdn));
   if (packet_iter != cache_packets.end()) {
     Packet * p = packet_iter->second->clone();
+    /*
     if (_verbose)
-      click_chatter("Packet ptr: %p", p);
+      printf("Packet ptr: %p\n", packet_iter->second);
+    */
     output(0).push(p);
     return 0;
   }
@@ -162,6 +166,7 @@ int ICMPTDNUpdate::send_update_host(struct in_addr host_ip, uint8_t new_tdn, Err
 int ICMPTDNUpdate::send_update_rack(uint8_t rack_id, uint8_t new_tdn, ErrorHandler* errh) {
 
   // do the samething but iterate thru a rack
+  // printf("Updating rack %d\n", rack_id);
   for (uint8_t host_id = 0; host_id < n_host; host_id++) {
     struct in_addr host_ip = DST_HOST_IP(base_addr, rack_id, host_id);
     send_update_host(host_ip, new_tdn, errh);
@@ -251,6 +256,7 @@ int ICMPTDNUpdate::update_all(const String& str, Element* e, void*, ErrorHandler
 }
 
 int ICMPTDNUpdate::update_rack(const String& str, Element* e, void*, ErrorHandler* errh) {
+  // printf("handler called\n");
   uint8_t new_tdn;
   uint8_t rack_id;
   
